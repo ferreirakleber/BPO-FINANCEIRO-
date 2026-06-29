@@ -58,6 +58,8 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
   'sistema': 'desp_operacional', 'software': 'desp_operacional', 'licença': 'desp_operacional',
   'internet': 'desp_operacional', 'telefone': 'desp_operacional', 'telecom': 'desp_operacional',
   'seguro': 'desp_operacional', 'contabil': 'desp_operacional', 'contábil': 'desp_operacional',
+  'depreciacao': 'depreciacao_amortizacao', 'depreciação': 'depreciacao_amortizacao',
+  'amortizacao': 'depreciacao_amortizacao', 'amortização': 'depreciacao_amortizacao',
   'ir ': 'ir_csll', 'csll': 'ir_csll', 'irpj': 'ir_csll',
 };
 
@@ -233,9 +235,15 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
                 </thead>
                 <tbody>
                   @for (linha of dreResult()!.linhas; track linha.label) {
-                    <tr [class]="linha.tipo === 'resultado' ? 'result-row' : 'clickable-row'" (click)="linha.detalhes?.length ? openDetalhes(linha) : null">
-                      <td [class]="linha.tipo === 'resultado' ? 'bold' : ''">{{ linha.label }}</td>
-                      <td class="text-right" [class]="getValorClass(linha)">{{ linha.valor | currency:'BRL' }}</td>
+                    <tr [class]="getRowClass(linha)" (click)="linha.detalhes?.length ? openDetalhes(linha) : null">
+                      <td [class]="linha.tipo === 'resultado' || linha.tipo === 'ebitda' ? 'bold' : ''">{{ linha.label }}</td>
+                      <td class="text-right" [class]="getValorClass(linha)">
+                        @if (linha.destaque && linha.label.includes('Margem')) {
+                          {{ linha.valor | number:'1.1-1' }}%
+                        } @else {
+                          {{ linha.valor | currency:'BRL' }}
+                        }
+                      </td>
                       <td class="text-right">{{ linha.percentual | number:'1.1-1' }}%</td>
                       <td class="text-right">{{ linha.detalhes?.length ?? '' }}</td>
                       <td>
@@ -364,6 +372,9 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
     .child-row td { font-size: 0.9rem; color: var(--text-color-secondary); }
     .clickable-row { cursor: pointer; }
     .clickable-row:hover { background: var(--surface-hover); }
+    .ebitda-row { background: #eff6ff; }
+    .ebitda-row td { font-weight: 700; color: #1e40af; }
+    .destaque-row td { font-style: italic; font-size: 0.9rem; }
   `,
 })
 export class ImportacaoComponent implements OnInit {
@@ -396,6 +407,7 @@ export class ImportacaoComponent implements OnInit {
     { label: 'Desp. Pessoal', value: 'desp_pessoal' },
     { label: 'Desp. Marketing', value: 'desp_marketing' },
     { label: 'Desp. Operacionais', value: 'desp_operacional' },
+    { label: 'Depreciação/Amortização', value: 'depreciacao_amortizacao' },
     { label: 'Outras Receitas/Despesas', value: 'outras_receitas_despesas' },
     { label: 'IR / CSLL', value: 'ir_csll' },
   ];
@@ -681,8 +693,16 @@ export class ImportacaoComponent implements OnInit {
     this.detalhesVisible = true;
   }
 
+  getRowClass(linha: any): string {
+    if (linha.tipo === 'ebitda') return 'ebitda-row';
+    if (linha.tipo === 'resultado' && linha.destaque) return 'result-row destaque-row';
+    if (linha.tipo === 'resultado') return 'result-row';
+    if (linha.detalhes?.length) return 'clickable-row';
+    return '';
+  }
+
   getValorClass(linha: any): string {
-    if (linha.tipo === 'resultado') {
+    if (linha.tipo === 'resultado' || linha.tipo === 'ebitda') {
       return linha.valor >= 0 ? 'valor-pos bold' : 'valor-neg bold';
     }
     return '';

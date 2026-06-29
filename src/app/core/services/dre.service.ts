@@ -15,6 +15,7 @@ const GRUPO_LABELS: Record<GrupoDre, string> = {
   desp_pessoal: 'Despesas com Pessoal',
   desp_marketing: 'Despesas com Marketing',
   desp_operacional: 'Despesas Operacionais Gerais',
+  depreciacao_amortizacao: 'Depreciação e Amortização',
   outras_receitas_despesas: 'Outras Receitas/Despesas',
   ir_csll: 'IR / CSLL',
 };
@@ -89,19 +90,30 @@ export class DreService {
       despesas_tributaria + despesas_pessoal + despesas_marketing + despesas_operacional;
 
     const resultado_operacional = lucro_bruto - total_despesas_operacionais;
+    const depreciacao_amortizacao = get('depreciacao_amortizacao');
+    const ebitda = resultado_operacional + depreciacao_amortizacao;
     const outras_receitas_despesas = get('outras_receitas_despesas');
     const lucro_antes_ir = resultado_operacional + outras_receitas_despesas;
     const ir_csll = get('ir_csll');
     const lucro_liquido = lucro_antes_ir - ir_csll;
 
     const pct = (v: number) => receita_bruta > 0 ? (v / receita_bruta) * 100 : 0;
+    const margem_bruta = pct(lucro_bruto);
+    const margem_ebitda = pct(ebitda);
+    const margem_liquida = pct(lucro_liquido);
 
     const linhas: DreLinha[] = [
+      // Receita
       { grupo: 'receita_bruta', label: 'Receita Bruta', valor: receita_bruta, percentual: 100, tipo: 'receita', detalhes: getDetalhes('receita_bruta') },
-      { grupo: 'deducoes', label: '(-) Deduções', valor: deducoes, percentual: pct(deducoes), tipo: 'deducao', detalhes: getDetalhes('deducoes') },
+      { grupo: 'deducoes', label: '(-) Deduções sobre Receita', valor: deducoes, percentual: pct(deducoes), tipo: 'deducao', detalhes: getDetalhes('deducoes') },
       { grupo: 'receita_bruta', label: '= Receita Líquida', valor: receita_liquida, percentual: pct(receita_liquida), tipo: 'resultado' },
-      { grupo: 'custos', label: '(-) Custos', valor: custos, percentual: pct(custos), tipo: 'custo', detalhes: getDetalhes('custos') },
+
+      // Custos
+      { grupo: 'custos', label: '(-) Custos dos Serviços/Produtos', valor: custos, percentual: pct(custos), tipo: 'custo', detalhes: getDetalhes('custos') },
       { grupo: 'custos', label: '= Lucro Bruto', valor: lucro_bruto, percentual: pct(lucro_bruto), tipo: 'resultado' },
+      { grupo: 'custos', label: '  Margem Bruta', valor: margem_bruta, percentual: margem_bruta, tipo: 'resultado', destaque: true },
+
+      // Despesas Operacionais
       {
         grupo: 'desp_admin', label: '(-) Despesas Operacionais', valor: total_despesas_operacionais, percentual: pct(total_despesas_operacionais), tipo: 'despesa',
         children: [
@@ -112,25 +124,37 @@ export class DreService {
           { grupo: 'desp_pessoal', label: 'Pessoal', valor: despesas_pessoal, percentual: pct(despesas_pessoal), tipo: 'despesa', detalhes: getDetalhes('desp_pessoal') },
           { grupo: 'desp_marketing', label: 'Marketing', valor: despesas_marketing, percentual: pct(despesas_marketing), tipo: 'despesa', detalhes: getDetalhes('desp_marketing') },
           { grupo: 'desp_operacional', label: 'Operacionais Gerais', valor: despesas_operacional, percentual: pct(despesas_operacional), tipo: 'despesa', detalhes: getDetalhes('desp_operacional') },
+          { grupo: 'depreciacao_amortizacao', label: 'Depreciação e Amortização', valor: depreciacao_amortizacao, percentual: pct(depreciacao_amortizacao), tipo: 'despesa', detalhes: getDetalhes('depreciacao_amortizacao') },
         ],
       },
-      { grupo: 'desp_operacional', label: '= Resultado Operacional', valor: resultado_operacional, percentual: pct(resultado_operacional), tipo: 'resultado' },
+
+      // Resultado Operacional
+      { grupo: 'desp_operacional', label: '= Resultado Operacional (EBIT)', valor: resultado_operacional, percentual: pct(resultado_operacional), tipo: 'resultado' },
+
+      // EBITDA
+      { grupo: 'depreciacao_amortizacao', label: '(+) Depreciação e Amortização', valor: depreciacao_amortizacao, percentual: pct(depreciacao_amortizacao), tipo: 'despesa', detalhes: getDetalhes('depreciacao_amortizacao') },
+      { grupo: 'depreciacao_amortizacao', label: '= EBITDA', valor: ebitda, percentual: pct(ebitda), tipo: 'ebitda', destaque: true },
+      { grupo: 'depreciacao_amortizacao', label: '  Margem EBITDA', valor: margem_ebitda, percentual: margem_ebitda, tipo: 'ebitda', destaque: true },
+
+      // Resultado Final
       { grupo: 'outras_receitas_despesas', label: '(+/-) Outras Receitas/Despesas', valor: outras_receitas_despesas, percentual: pct(outras_receitas_despesas), tipo: 'receita', detalhes: getDetalhes('outras_receitas_despesas') },
-      { grupo: 'outras_receitas_despesas', label: '= Lucro Antes do IR', valor: lucro_antes_ir, percentual: pct(lucro_antes_ir), tipo: 'resultado' },
+      { grupo: 'outras_receitas_despesas', label: '= Lucro Antes do IR (EBT)', valor: lucro_antes_ir, percentual: pct(lucro_antes_ir), tipo: 'resultado' },
       { grupo: 'ir_csll', label: '(-) IR / CSLL', valor: ir_csll, percentual: pct(ir_csll), tipo: 'despesa', detalhes: getDetalhes('ir_csll') },
-      { grupo: 'ir_csll', label: '= Lucro Líquido', valor: lucro_liquido, percentual: pct(lucro_liquido), tipo: 'resultado' },
+      { grupo: 'ir_csll', label: '= Lucro Líquido', valor: lucro_liquido, percentual: pct(lucro_liquido), tipo: 'resultado', destaque: true },
+      { grupo: 'ir_csll', label: '  Margem Líquida', valor: margem_liquida, percentual: margem_liquida, tipo: 'resultado', destaque: true },
     ];
 
     const dre: DreData = {
       periodo: `${dataInicio} a ${dataFim}`,
       empresa_id: empresaId,
       empresa_nome: empresaNome,
-      receita_bruta, deducoes, receita_liquida, custos, lucro_bruto,
+      receita_bruta, deducoes, receita_liquida, custos, lucro_bruto, margem_bruta,
       despesas_admin, despesas_comercial, despesas_financeira,
       despesas_tributaria, despesas_pessoal, despesas_marketing,
       despesas_operacional, total_despesas_operacionais,
-      resultado_operacional, outras_receitas_despesas,
-      lucro_antes_ir, ir_csll, lucro_liquido, linhas,
+      resultado_operacional, depreciacao_amortizacao, ebitda, margem_ebitda,
+      outras_receitas_despesas,
+      lucro_antes_ir, ir_csll, lucro_liquido, margem_liquida, linhas,
     };
 
     return dre;

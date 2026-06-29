@@ -14,9 +14,10 @@ export interface DreLinha {
   label: string;
   valor: number;
   percentual: number;
-  tipo: 'receita' | 'deducao' | 'custo' | 'despesa' | 'resultado';
+  tipo: 'receita' | 'deducao' | 'custo' | 'despesa' | 'resultado' | 'ebitda';
   children?: DreLinha[];
   detalhes?: DreLancamentoDetalhe[];
+  destaque?: boolean;
 }
 
 export interface DreData {
@@ -28,6 +29,7 @@ export interface DreData {
   receita_liquida: number;
   custos: number;
   lucro_bruto: number;
+  margem_bruta: number;
   despesas_admin: number;
   despesas_comercial: number;
   despesas_financeira: number;
@@ -37,9 +39,13 @@ export interface DreData {
   despesas_operacional: number;
   total_despesas_operacionais: number;
   resultado_operacional: number;
+  depreciacao_amortizacao: number;
+  ebitda: number;
+  margem_ebitda: number;
   outras_receitas_despesas: number;
   lucro_antes_ir: number;
   ir_csll: number;
   lucro_liquido: number;
+  margem_liquida: number;
   linhas: DreLinha[];
 }

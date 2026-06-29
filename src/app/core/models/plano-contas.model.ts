@@ -11,6 +11,7 @@ export type GrupoDre =
   | 'desp_pessoal'
   | 'desp_marketing'
   | 'desp_operacional'
+  | 'depreciacao_amortizacao'
   | 'outras_receitas_despesas'
   | 'ir_csll';
 
