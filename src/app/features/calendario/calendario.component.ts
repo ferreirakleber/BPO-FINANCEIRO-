@@ -17,6 +17,7 @@ import { EmpresaService } from '../../core/services/empresa.service';
 import { LancamentoService } from '../../core/services/lancamento.service';
 import { PlanoContasService } from '../../core/services/plano-contas.service';
 import { Lancamento, StatusLancamento } from '../../core/models/lancamento.model';
+import * as XLSX from 'xlsx';
 
 interface DiaAgenda {
   data: string;
@@ -46,7 +47,7 @@ interface DiaAgenda {
         <span class="mes-label">{{ mesAnoLabel() }}</span>
         <p-button icon="pi pi-chevron-right" [rounded]="true" [text]="true" (onClick)="mesSeguinte()" />
         <p-button icon="pi pi-whatsapp" label="Enviar Resumo" severity="success" (onClick)="compartilharResumoMes()" styleClass="ml-3" />
-        <p-button label="Importar CSV" icon="pi pi-upload" severity="secondary" (onClick)="importDialogVisible = true" />
+        <p-button label="Importar Excel" icon="pi pi-file-excel" severity="secondary" (onClick)="importDialogVisible = true" />
         <p-button label="Novo Lançamento" icon="pi pi-plus" (onClick)="openNew()" />
       </div>
     </div>
@@ -213,23 +214,20 @@ interface DiaAgenda {
     <!-- Dialog Importação CSV -->
     <p-dialog
       [(visible)]="importDialogVisible"
-      header="Importar Contas a Pagar (CSV)"
+      header="Importar Contas a Pagar"
       [modal]="true"
       [style]="{ width: '600px' }"
     >
       <p style="margin-bottom: 1rem">
-        O arquivo CSV deve conter as colunas separadas por <strong>ponto-e-vírgula (;)</strong>:
-      </p>
-      <p style="margin-bottom: 1rem; font-family: monospace; background: var(--surface-ground); padding: 0.75rem; border-radius: 6px;">
-        data;descricao;tipo;valor;fornecedor
+        Selecione o arquivo Excel (.xls, .xlsx) ou CSV com as contas a pagar.
       </p>
       <p style="margin-bottom: 1rem; color: var(--text-color-secondary); font-size: 0.9rem;">
-        Data: DD/MM/AAAA | Tipo: receita ou despesa | Valor: use vírgula para decimais (ex: 1500,00)
+        Formato aceito: <strong>Visão Contas a Pagar</strong> ou arquivo com colunas de data, descrição e valor.
       </p>
 
       <input
         type="file"
-        accept=".csv,.ofx"
+        accept=".xlsx,.xls,.csv,.ofx"
         (change)="onFileSelect($event)"
       />
 
@@ -523,71 +521,64 @@ export class CalendarioComponent implements OnInit {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      const content = e.target?.result as string;
-      if (file.name.endsWith('.ofx')) {
-        this.parseOfx(content);
-      } else {
-        this.parseCsv(content);
-      }
+      const data = new Uint8Array(e.target?.result as ArrayBuffer);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json<any>(sheet, { raw: false });
+      this.parseExcel(json);
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   }
 
-  private parseCsv(content: string) {
-    const lines = content.split('\n').filter((l) => l.trim());
-    if (lines.length < 2) return;
+  private parseExcel(rows: any[]) {
+    if (rows.length === 0) return;
 
-    const rows: Partial<Lancamento>[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(';').map((c) => c.trim().replace(/"/g, ''));
-      if (cols.length < 4) continue;
+    const keys = Object.keys(rows[0]);
+    const findCol = (hints: string[]) =>
+      keys.find((k) => hints.some((h) => k.toLowerCase().includes(h))) ?? null;
 
-      const [data, descricao, tipo, valorStr, fornecedor] = cols;
-      const valor = parseFloat(valorStr.replace('.', '').replace(',', '.'));
-      if (isNaN(valor)) continue;
+    const colData = findCol(['vencimento', 'data']);
+    const colDesc = findCol(['descri', 'historico', 'histórico', 'memo']);
+    const colValor = findCol(['valor original', 'valor da parcela', 'valor']);
+    const colSituacao = findCol(['situação', 'situacao', 'status']);
+    const colCategoria = findCol(['categoria', 'classificacao']);
+    const colFornecedor = findCol(['fornecedor', 'cliente', 'conta bancária', 'conta bancaria']);
 
-      const parts = data.split('/');
-      const dataFormatted = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : data;
+    const parsed: Partial<Lancamento>[] = [];
 
-      rows.push({
-        descricao,
-        tipo: (tipo?.toLowerCase() === 'receita' ? 'receita' : 'despesa') as any,
-        valor: Math.abs(valor),
-        data_vencimento: dataFormatted,
-        status: 'pendente' as any,
-        fornecedor_cliente: fornecedor || null,
+    for (const row of rows) {
+      const rawData = row[colData ?? ''] ?? '';
+      const descricao = row[colDesc ?? ''] ?? '';
+      const rawValor = row[colValor ?? ''] ?? '0';
+      const situacao = row[colSituacao ?? ''] ?? '';
+      const categoria = row[colCategoria ?? ''] ?? '';
+      const fornecedor = row[colFornecedor ?? ''] ?? '';
+
+      const valor = typeof rawValor === 'number'
+        ? Math.abs(rawValor)
+        : Math.abs(parseFloat(String(rawValor).replace(/\./g, '').replace(',', '.')));
+
+      if (isNaN(valor) || valor === 0) continue;
+
+      const parts = String(rawData).split('/');
+      const dataIso = parts.length === 3
+        ? `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+        : rawData;
+
+      const isPago = situacao.toLowerCase().includes('pago') || situacao.toLowerCase().includes('liquidado');
+
+      parsed.push({
+        descricao: String(descricao).trim(),
+        tipo: 'despesa' as any,
+        valor,
+        data_vencimento: dataIso,
+        status: (isPago ? 'pago' : 'pendente') as any,
+        data_pagamento: isPago ? dataIso : null,
+        fornecedor_cliente: String(fornecedor || categoria).trim() || null,
       });
     }
 
-    this.importPreview.set(rows);
-  }
-
-  private parseOfx(content: string) {
-    const rows: Partial<Lancamento>[] = [];
-    const transactions = content.split('<STMTTRN>').slice(1);
-
-    for (const tx of transactions) {
-      const getValue = (tag: string) => {
-        const match = tx.match(new RegExp(`<${tag}>([^<\\n]+)`));
-        return match?.[1]?.trim() ?? '';
-      };
-
-      const dtPosted = getValue('DTPOSTED');
-      const amount = parseFloat(getValue('TRNAMT').replace(',', '.'));
-      const memo = getValue('MEMO') || getValue('NAME');
-
-      if (!dtPosted || isNaN(amount)) continue;
-
-      rows.push({
-        descricao: memo,
-        tipo: (amount >= 0 ? 'receita' : 'despesa') as any,
-        valor: Math.abs(amount),
-        data_vencimento: `${dtPosted.substring(0, 4)}-${dtPosted.substring(4, 6)}-${dtPosted.substring(6, 8)}`,
-        status: 'pendente' as any,
-      });
-    }
-
-    this.importPreview.set(rows);
+    this.importPreview.set(parsed);
   }
 
   async executeImport() {
