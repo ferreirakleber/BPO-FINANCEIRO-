@@ -42,10 +42,10 @@ export const routes: Routes = [
         canActivate: [roleGuard('admin_geral')],
       },
       {
-        path: 'plano-contas',
+        path: 'calendario',
         loadComponent: () =>
-          import('./features/plano-contas/plano-contas.component').then(
-            (m) => m.PlanoContasComponent,
+          import('./features/calendario/calendario.component').then(
+            (m) => m.CalendarioComponent,
           ),
       },
       {

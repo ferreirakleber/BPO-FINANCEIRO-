@@ -42,14 +42,14 @@ import { AuthService } from '../../../core/services/auth.service';
           <span>Lançamentos</span>
         </a>
 
+        <a routerLink="/calendario" routerLinkActive="active" class="nav-item">
+          <i class="pi pi-calendar"></i>
+          <span>Calendário</span>
+        </a>
+
         <a routerLink="/contas-bancarias" routerLinkActive="active" class="nav-item">
           <i class="pi pi-wallet"></i>
           <span>Contas Bancárias</span>
-        </a>
-
-        <a routerLink="/plano-contas" routerLinkActive="active" class="nav-item">
-          <i class="pi pi-list"></i>
-          <span>Plano de Contas</span>
         </a>
       </nav>
     </div>
