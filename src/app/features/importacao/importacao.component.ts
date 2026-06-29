@@ -127,6 +127,14 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
             <span>Pagos</span>
             <strong>{{ qtdPago() }} | {{ totalPago() | currency:'BRL' }}</strong>
           </div>
+          <div class="stat receita">
+            <span>Receitas</span>
+            <strong>{{ totalReceitas() | currency:'BRL' }}</strong>
+          </div>
+          <div class="stat despesa">
+            <span>Despesas</span>
+            <strong>{{ totalDespesas() | currency:'BRL' }}</strong>
+          </div>
           <div class="stat total">
             <span>Valor Total</span>
             <strong>{{ totalGeral() | currency:'BRL' }}</strong>
@@ -168,7 +176,9 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
                   [severity]="linha.situacao === 'Em aberto' ? 'warn' : 'success'"
                 />
               </td>
-              <td style="text-align: right" class="valor-neg">{{ linha.valor | currency:'BRL' }}</td>
+              <td style="text-align: right" [class]="linha.grupoDre === 'receita_bruta' ? 'valor-pos' : 'valor-neg'">
+            {{ linha.valor | currency:'BRL' }}
+          </td>
               <td style="text-align: right" [class]="linha.valorAberto > 0 ? 'valor-neg' : ''">
                 {{ linha.valorAberto | currency:'BRL' }}
               </td>
@@ -276,9 +286,12 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
     .stat strong { font-size: 1.1rem; }
     .stat.aberto strong { color: #f59e0b; }
     .stat.pago strong { color: #22c55e; }
+    .stat.receita strong { color: #22c55e; }
+    .stat.despesa strong { color: #ef4444; }
     .stat.total strong { color: #3b82f6; }
 
     .text-muted { color: var(--text-color-secondary); }
+    .valor-pos { color: #22c55e; font-weight: 600; }
     .valor-neg { color: #ef4444; font-weight: 600; }
 
     .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
@@ -338,8 +351,10 @@ export class ImportacaoComponent implements OnInit {
   qtdAberto = computed(() => this.linhas().filter((l) => l.situacao === 'Em aberto').length);
   qtdPago = computed(() => this.linhas().filter((l) => l.situacao !== 'Em aberto').length);
   totalAberto = computed(() => this.linhas().filter((l) => l.situacao === 'Em aberto').reduce((s, l) => s + l.valorAberto, 0));
-  totalPago = computed(() => this.linhas().filter((l) => l.situacao !== 'Em aberto').reduce((s, l) => s + l.valorPago, 0));
+  totalPago = computed(() => this.linhas().filter((l) => l.situacao !== 'Em aberto').reduce((s, l) => s + l.valor, 0));
   totalGeral = computed(() => this.linhas().reduce((s, l) => s + l.valor, 0));
+  totalReceitas = computed(() => this.linhas().filter((l) => l.grupoDre === 'receita_bruta').reduce((s, l) => s + l.valor, 0));
+  totalDespesas = computed(() => this.linhas().filter((l) => l.grupoDre !== 'receita_bruta').reduce((s, l) => s + l.valor, 0));
 
   empresaSelecionadaNome = computed(() => {
     const emp = this.empresaService.empresas().find((e) => e.id === this.empresaSelecionadaId);
@@ -390,32 +405,83 @@ export class ImportacaoComponent implements OnInit {
       const workbook = XLSX.read(data, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json<any>(sheet, { raw: false });
-      this.parseVisaoContasPagar(json);
+      this.parseRows(json);
     };
     reader.readAsArrayBuffer(file);
   }
 
-  private parseVisaoContasPagar(rows: any[]) {
+  private parseRows(rows: any[]) {
+    if (rows.length === 0) return;
+
+    const keys = Object.keys(rows[0]);
+    const has = (hint: string) => keys.some((k) => k.toLowerCase().includes(hint));
+
+    // Detectar formato
+    const isExtrato = has('data movimento') || has('saldo conta');
+    const isContasPagar = has('data de vencimento') || has('parcela em aberto');
+
     const linhas: LinhaExtrato[] = [];
 
     for (const row of rows) {
-      const dataVenc = row['Data de vencimento'] ?? row['Data vencimento'] ?? '';
-      const dataComp = row['Data de competência'] ?? row['Data competência'] ?? '';
-      const descricao = row['Descrição'] ?? row['Descricao'] ?? '';
-      const valor = this.parseValor(row['Valor original da parcela (R$)'] ?? row['Valor'] ?? '0');
-      const valorPago = this.parseValor(row['Valor total pago da parcela (R$)'] ?? row['Valor pago'] ?? '0');
-      const valorAberto = this.parseValor(row['Valor total da parcela em aberto (R$)'] ?? row['Valor em aberto'] ?? '0');
-      const situacao = row['Situação'] ?? row['Situacao'] ?? 'Em aberto';
-      const categoria = row['Categoria 1'] ?? row['Categoria'] ?? '';
-      const contaBancaria = row['Conta bancária'] ?? row['Conta bancaria'] ?? '';
-      const formaPagamento = row['Forma de pagamento'] ?? '';
-      const notaFiscal = row['Nota fiscal'] ?? '';
-      const observacoes = row['Observações'] ?? row['Observacoes'] ?? '';
-      const recorrencia = row['Recorrência'] ?? '';
+      let dataVenc: string;
+      let dataComp: string;
+      let descricao: string;
+      let valor: number;
+      let valorPago: number;
+      let valorAberto: number;
+      let situacao: string;
+      let categoria: string;
+      let contaBancaria: string;
+      let formaPagamento: string;
+      let notaFiscal: string;
+      let observacoes: string;
+      let recorrencia: string;
+      let tipo: string;
+
+      if (isExtrato) {
+        // Formato Extrato Financeiro
+        dataVenc = row['Data movimento'] ?? row['Data original de vencimento'] ?? '';
+        dataComp = row['Data de competência'] ?? '';
+        descricao = row['Descrição'] ?? '';
+        valor = this.parseValor(row['Valor (R$)'] ?? row['Valor original (R$)'] ?? '0');
+        valorPago = row['Situação']?.toLowerCase()?.includes('conciliado') || row['Situação']?.toLowerCase()?.includes('pago') ? valor : 0;
+        valorAberto = valorPago > 0 ? 0 : valor;
+        situacao = row['Situação'] ?? 'Em aberto';
+        tipo = row['Tipo'] ?? '';
+        categoria = row['Categoria 1'] ?? '';
+        contaBancaria = row['Conta bancária'] ?? '';
+        formaPagamento = row['Forma de pgto/recbto'] ?? '';
+        notaFiscal = row['Nota fiscal'] ?? '';
+        observacoes = row['Observações'] ?? '';
+        recorrencia = row['Recorrência'] ?? '';
+      } else {
+        // Formato Visão Contas a Pagar
+        dataVenc = row['Data de vencimento'] ?? row['Data vencimento'] ?? '';
+        dataComp = row['Data de competência'] ?? row['Data competência'] ?? '';
+        descricao = row['Descrição'] ?? row['Descricao'] ?? '';
+        valor = this.parseValor(row['Valor original da parcela (R$)'] ?? row['Valor'] ?? '0');
+        valorPago = this.parseValor(row['Valor total pago da parcela (R$)'] ?? row['Valor pago'] ?? '0');
+        valorAberto = this.parseValor(row['Valor total da parcela em aberto (R$)'] ?? row['Valor em aberto'] ?? '0');
+        situacao = row['Situação'] ?? row['Situacao'] ?? 'Em aberto';
+        tipo = 'Despesa';
+        categoria = row['Categoria 1'] ?? row['Categoria'] ?? '';
+        contaBancaria = row['Conta bancária'] ?? row['Conta bancaria'] ?? '';
+        formaPagamento = row['Forma de pagamento'] ?? '';
+        notaFiscal = row['Nota fiscal'] ?? '';
+        observacoes = row['Observações'] ?? row['Observacoes'] ?? '';
+        recorrencia = row['Recorrência'] ?? '';
+      }
 
       if (!descricao && valor === 0) continue;
 
-      const grupoDre = this.detectGrupoDre(descricao, categoria);
+      // Normalizar situação
+      const sitLower = situacao.toLowerCase();
+      let sitNorm = 'Em aberto';
+      if (sitLower.includes('conciliado') || sitLower.includes('pago') || sitLower.includes('liquidado') || sitLower.includes('recebid')) {
+        sitNorm = tipo.toLowerCase() === 'receita' ? 'Recebido' : 'Pago';
+      }
+
+      const grupoDre = this.detectGrupoDre(descricao, categoria, tipo);
 
       linhas.push({
         dataVencimento: dataVenc,
@@ -424,7 +490,7 @@ export class ImportacaoComponent implements OnInit {
         valor,
         valorPago,
         valorAberto,
-        situacao,
+        situacao: sitNorm,
         categoria,
         contaBancaria,
         formaPagamento,
@@ -446,8 +512,10 @@ export class ImportacaoComponent implements OnInit {
     return isNaN(num) ? 0 : Math.abs(num);
   }
 
-  private detectGrupoDre(descricao: string, categoria: string): GrupoDre {
+  private detectGrupoDre(descricao: string, categoria: string, tipo?: string): GrupoDre {
     const texto = `${descricao} ${categoria}`.toLowerCase();
+
+    if (tipo?.toLowerCase() === 'receita') return 'receita_bruta';
 
     for (const [keyword, grupo] of Object.entries(CATEGORIA_DRE_MAP)) {
       if (texto.includes(keyword)) return grupo;
@@ -484,10 +552,10 @@ export class ImportacaoComponent implements OnInit {
 
       return {
         descricao: l.descricao,
-        tipo: 'despesa',
+        tipo: l.grupoDre === 'receita_bruta' ? 'receita' : 'despesa',
         valor: l.valor,
         data_vencimento: dataIso,
-        status: isPago ? 'pago' : 'pendente',
+        status: isPago ? (l.grupoDre === 'receita_bruta' ? 'recebido' : 'pago') : 'pendente',
         data_pagamento: isPago ? dataIso : null,
         plano_conta_id: planoContaId,
         empresa_id: empresaId,
