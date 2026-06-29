@@ -45,7 +45,8 @@ interface DiaAgenda {
         <p-button icon="pi pi-chevron-left" [rounded]="true" [text]="true" (onClick)="mesAnterior()" />
         <span class="mes-label">{{ mesAnoLabel() }}</span>
         <p-button icon="pi pi-chevron-right" [rounded]="true" [text]="true" (onClick)="mesSeguinte()" />
-        <p-button label="Importar CSV" icon="pi pi-upload" severity="secondary" (onClick)="importDialogVisible = true" styleClass="ml-3" />
+        <p-button icon="pi pi-whatsapp" label="Enviar Resumo" severity="success" (onClick)="compartilharResumoMes()" styleClass="ml-3" />
+        <p-button label="Importar CSV" icon="pi pi-upload" severity="secondary" (onClick)="importDialogVisible = true" />
         <p-button label="Novo Lançamento" icon="pi pi-plus" (onClick)="openNew()" />
       </div>
     </div>
@@ -95,6 +96,14 @@ interface DiaAgenda {
                 @if (dia.totalReceber > 0) {
                   <span class="total-receber">+{{ dia.totalReceber | currency:'BRL' }}</span>
                 }
+                <p-button
+                  icon="pi pi-whatsapp"
+                  [rounded]="true"
+                  [text]="true"
+                  severity="success"
+                  size="small"
+                  (onClick)="compartilharResumoDia(dia)"
+                />
               </div>
             </div>
 
@@ -601,6 +610,78 @@ export class CalendarioComponent implements OnInit {
     this.importing.set(false);
     this.importPreview.set([]);
     this.importDialogVisible = false;
+  }
+
+  compartilharResumoMes() {
+    const empresa = this.empresaService.empresaAtiva();
+    const nome = empresa?.nome_fantasia || empresa?.razao_social || '';
+    const mes = this.mesAnoLabel();
+
+    let msg = `📊 *Resumo Financeiro - ${nome}*\n`;
+    msg += `📅 ${mes}\n\n`;
+
+    if (this.qtdPagarMes() > 0) {
+      msg += `🔴 *Contas a Pagar:* R$ ${this.totalPagarMes().toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${this.qtdPagarMes()} pendentes)\n`;
+    }
+    if (this.qtdReceberMes() > 0) {
+      msg += `🟢 *Contas a Receber:* R$ ${this.totalReceberMes().toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${this.qtdReceberMes()} pendentes)\n`;
+    }
+    if (this.qtdVencido() > 0) {
+      msg += `⚠️ *Vencidos:* R$ ${this.totalVencido().toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${this.qtdVencido()} atrasados)\n`;
+    }
+
+    msg += `\n📋 *Próximos vencimentos:*\n`;
+    const pendentes = this.lancamentos()
+      .filter((l) => l.status === 'pendente')
+      .slice(0, 10);
+
+    for (const l of pendentes) {
+      const d = new Date(l.data_vencimento + 'T12:00:00');
+      const dataFmt = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const icon = l.tipo === 'receita' ? '🟢' : '🔴';
+      msg += `${icon} ${dataFmt} - ${l.descricao} - R$ ${Number(l.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+      if (l.fornecedor_cliente) msg += ` (${l.fornecedor_cliente})`;
+      msg += `\n`;
+    }
+
+    if (pendentes.length === 0) {
+      msg += `✅ Nenhum vencimento pendente\n`;
+    }
+
+    msg += `\n_Enviado via BPO Financeiro_`;
+    this.openWhatsApp(msg);
+  }
+
+  compartilharResumoDia(dia: DiaAgenda) {
+    const empresa = this.empresaService.empresaAtiva();
+    const nome = empresa?.nome_fantasia || empresa?.razao_social || '';
+
+    let msg = `📅 *Agenda Financeira - ${dia.dataFormatada} (${dia.diaSemana})*\n`;
+    msg += `🏢 ${nome}\n\n`;
+
+    for (const l of dia.lancamentos) {
+      const icon = l.tipo === 'receita' ? '🟢' : '🔴';
+      const statusIcon = l.status === 'pendente' ? '⏳' : '✅';
+      msg += `${icon} ${l.descricao}\n`;
+      msg += `   💰 R$ ${Number(l.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+      if (l.fornecedor_cliente) msg += ` | ${l.fornecedor_cliente}`;
+      msg += ` | ${statusIcon} ${l.status}\n`;
+    }
+
+    if (dia.totalPagar > 0) {
+      msg += `\n🔴 Total a pagar: R$ ${dia.totalPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    }
+    if (dia.totalReceber > 0) {
+      msg += `\n🟢 Total a receber: R$ ${dia.totalReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    }
+
+    msg += `\n\n_Enviado via BPO Financeiro_`;
+    this.openWhatsApp(msg);
+  }
+
+  private openWhatsApp(msg: string) {
+    const encoded = encodeURIComponent(msg);
+    window.open(`https://wa.me/?text=${encoded}`, '_blank');
   }
 
   getStatusSeverity(status: StatusLancamento): 'success' | 'warn' | 'danger' | 'info' {
