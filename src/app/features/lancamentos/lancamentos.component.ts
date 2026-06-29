@@ -48,8 +48,12 @@ import { Lancamento, TipoLancamento, StatusLancamento } from '../../core/models/
       </div>
     </div>
 
-    <!-- Filtros -->
+    <!-- Pesquisa e Filtros -->
     <div class="filters">
+      <span class="p-input-icon-left">
+        <i class="pi pi-search"></i>
+        <input pInputText (input)="dt.filterGlobal($any($event.target).value, 'contains')" placeholder="Buscar descrição, fornecedor..." style="width: 300px" />
+      </span>
       <p-dropdown
         [(ngModel)]="filtro.tipo"
         [options]="tiposOptions"
@@ -101,12 +105,14 @@ import { Lancamento, TipoLancamento, StatusLancamento } from '../../core/models/
     </div>
 
     <p-table
+      #dt
       [value]="lancamentoService.lancamentos()"
       [loading]="lancamentoService.loading()"
       [paginator]="true"
       [rows]="15"
       [rowHover]="true"
       [(selection)]="selectedLancamentos"
+      [globalFilterFields]="['descricao', 'fornecedor_cliente', 'documento', 'observacao']"
       styleClass="p-datatable-striped p-datatable-sm"
     >
       <ng-template pTemplate="header">
