@@ -45,7 +45,8 @@ interface DiaAgenda {
         <p-button icon="pi pi-chevron-left" [rounded]="true" [text]="true" (onClick)="mesAnterior()" />
         <span class="mes-label">{{ mesAnoLabel() }}</span>
         <p-button icon="pi pi-chevron-right" [rounded]="true" [text]="true" (onClick)="mesSeguinte()" />
-        <p-button label="Novo Lançamento" icon="pi pi-plus" (onClick)="openNew()" styleClass="ml-3" />
+        <p-button label="Importar CSV" icon="pi pi-upload" severity="secondary" (onClick)="importDialogVisible = true" styleClass="ml-3" />
+        <p-button label="Novo Lançamento" icon="pi pi-plus" (onClick)="openNew()" />
       </div>
     </div>
 
@@ -200,6 +201,47 @@ interface DiaAgenda {
       </ng-template>
     </p-dialog>
 
+    <!-- Dialog Importação CSV -->
+    <p-dialog
+      [(visible)]="importDialogVisible"
+      header="Importar Contas a Pagar (CSV)"
+      [modal]="true"
+      [style]="{ width: '600px' }"
+    >
+      <p style="margin-bottom: 1rem">
+        O arquivo CSV deve conter as colunas separadas por <strong>ponto-e-vírgula (;)</strong>:
+      </p>
+      <p style="margin-bottom: 1rem; font-family: monospace; background: var(--surface-ground); padding: 0.75rem; border-radius: 6px;">
+        data;descricao;tipo;valor;fornecedor
+      </p>
+      <p style="margin-bottom: 1rem; color: var(--text-color-secondary); font-size: 0.9rem;">
+        Data: DD/MM/AAAA | Tipo: receita ou despesa | Valor: use vírgula para decimais (ex: 1500,00)
+      </p>
+
+      <input
+        type="file"
+        accept=".csv,.ofx"
+        (change)="onFileSelect($event)"
+      />
+
+      @if (importPreview().length > 0) {
+        <div style="margin-top: 1rem; padding: 0.75rem; background: var(--surface-ground); border-radius: 6px;">
+          <strong>{{ importPreview().length }}</strong> lançamentos encontrados no arquivo
+        </div>
+      }
+
+      <ng-template pTemplate="footer">
+        <p-button label="Cancelar" [text]="true" (onClick)="importDialogVisible = false" />
+        <p-button
+          label="Importar"
+          icon="pi pi-upload"
+          (onClick)="executeImport()"
+          [loading]="importing()"
+          [disabled]="importPreview().length === 0"
+        />
+      </ng-template>
+    </p-dialog>
+
     <p-confirmDialog />
     <p-toast />
   `,
@@ -348,7 +390,10 @@ export class CalendarioComponent implements OnInit {
   });
 
   dialogVisible = false;
+  importDialogVisible = false;
   saving = signal(false);
+  importing = signal(false);
+  importPreview = signal<Partial<Lancamento>[]>([]);
   form: Partial<Lancamento> = {};
   formDataVencimento: Date | null = null;
 
@@ -460,6 +505,102 @@ export class CalendarioComponent implements OnInit {
         this.messageService.add({ severity: 'success', summary: `Lançamento ${status}` });
       },
     });
+  }
+
+  onFileSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      if (file.name.endsWith('.ofx')) {
+        this.parseOfx(content);
+      } else {
+        this.parseCsv(content);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  private parseCsv(content: string) {
+    const lines = content.split('\n').filter((l) => l.trim());
+    if (lines.length < 2) return;
+
+    const rows: Partial<Lancamento>[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(';').map((c) => c.trim().replace(/"/g, ''));
+      if (cols.length < 4) continue;
+
+      const [data, descricao, tipo, valorStr, fornecedor] = cols;
+      const valor = parseFloat(valorStr.replace('.', '').replace(',', '.'));
+      if (isNaN(valor)) continue;
+
+      const parts = data.split('/');
+      const dataFormatted = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : data;
+
+      rows.push({
+        descricao,
+        tipo: (tipo?.toLowerCase() === 'receita' ? 'receita' : 'despesa') as any,
+        valor: Math.abs(valor),
+        data_vencimento: dataFormatted,
+        status: 'pendente' as any,
+        fornecedor_cliente: fornecedor || null,
+      });
+    }
+
+    this.importPreview.set(rows);
+  }
+
+  private parseOfx(content: string) {
+    const rows: Partial<Lancamento>[] = [];
+    const transactions = content.split('<STMTTRN>').slice(1);
+
+    for (const tx of transactions) {
+      const getValue = (tag: string) => {
+        const match = tx.match(new RegExp(`<${tag}>([^<\\n]+)`));
+        return match?.[1]?.trim() ?? '';
+      };
+
+      const dtPosted = getValue('DTPOSTED');
+      const amount = parseFloat(getValue('TRNAMT').replace(',', '.'));
+      const memo = getValue('MEMO') || getValue('NAME');
+
+      if (!dtPosted || isNaN(amount)) continue;
+
+      rows.push({
+        descricao: memo,
+        tipo: (amount >= 0 ? 'receita' : 'despesa') as any,
+        valor: Math.abs(amount),
+        data_vencimento: `${dtPosted.substring(0, 4)}-${dtPosted.substring(4, 6)}-${dtPosted.substring(6, 8)}`,
+        status: 'pendente' as any,
+      });
+    }
+
+    this.importPreview.set(rows);
+  }
+
+  async executeImport() {
+    const rows = this.importPreview();
+    if (rows.length === 0) return;
+
+    const defaultPlano = this.planoContasService.contas()[0];
+    if (!defaultPlano) {
+      this.messageService.add({ severity: 'error', summary: 'Cadastre ao menos uma conta no Plano de Contas antes de importar' });
+      return;
+    }
+
+    this.importing.set(true);
+
+    const rowsWithPlano = rows.map((r) => ({ ...r, plano_conta_id: defaultPlano.id }));
+    const count = await this.lancamentoService.importFromCsv(rowsWithPlano);
+    await this.loadLancamentos();
+
+    this.messageService.add({ severity: 'success', summary: `${count} lançamentos importados` });
+    this.importing.set(false);
+    this.importPreview.set([]);
+    this.importDialogVisible = false;
   }
 
   getStatusSeverity(status: StatusLancamento): 'success' | 'warn' | 'danger' | 'info' {
