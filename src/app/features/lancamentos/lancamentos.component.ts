@@ -104,6 +104,16 @@ import { Lancamento, TipoLancamento, StatusLancamento } from '../../core/models/
         <span>Saldo</span>
         <strong>{{ saldo() | currency:'BRL' }}</strong>
       </div>
+      @if (selectedLancamentos.length > 0) {
+        <div class="summary-card selecionados">
+          <span>Selecionados ({{ selectedLancamentos.length }})</span>
+          <strong>{{ totalSelecionado() | currency:'BRL' }}</strong>
+          <small>
+            @if (receitasSelecionadas() > 0) { +{{ receitasSelecionadas() | currency:'BRL' }} }
+            @if (despesasSelecionadas() > 0) { -{{ despesasSelecionadas() | currency:'BRL' }} }
+          </small>
+        </div>
+      }
     </div>
 
     <!-- Resumo por Categoria -->
@@ -370,6 +380,7 @@ import { Lancamento, TipoLancamento, StatusLancamento } from '../../core/models/
     .summary-card.receitas { background: #dcfce7; color: #166534; }
     .summary-card.despesas { background: #fee2e2; color: #991b1b; }
     .summary-card.saldo { background: #dbeafe; color: #1e40af; }
+    .summary-card.selecionados { background: #faf5ff; color: #7c3aed; border: 2px solid #c4b5fd; }
     .summary-card small { font-size: 0.75rem; opacity: 0.7; margin-top: 0.15rem; }
 
     .categorias-resumo {
@@ -448,6 +459,20 @@ export class LancamentosComponent implements OnInit {
   );
 
   saldo = computed(() => this.totalReceitas() - this.totalDespesas());
+
+  totalSelecionado = computed(() => {
+    const rec = this.selectedLancamentos.filter((l) => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
+    const desp = this.selectedLancamentos.filter((l) => l.tipo === 'despesa').reduce((s, l) => s + Number(l.valor), 0);
+    return rec - desp;
+  });
+
+  receitasSelecionadas = computed(() =>
+    this.selectedLancamentos.filter((l) => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0),
+  );
+
+  despesasSelecionadas = computed(() =>
+    this.selectedLancamentos.filter((l) => l.tipo === 'despesa').reduce((s, l) => s + Number(l.valor), 0),
+  );
 
   qtdReceitas = computed(() =>
     this.lancamentoService.lancamentos().filter((l) => l.tipo === 'receita' && l.status !== 'cancelado').length,
