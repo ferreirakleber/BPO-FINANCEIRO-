@@ -107,10 +107,10 @@ import { Lancamento, TipoLancamento, StatusLancamento } from '../../core/models/
       @if (selectedLancamentos.length > 0) {
         <div class="summary-card selecionados">
           <span>Selecionados ({{ selectedLancamentos.length }})</span>
-          <strong>{{ totalSelecionado() | currency:'BRL' }}</strong>
+          <strong>{{ getSaldoSelecionado() | currency:'BRL' }}</strong>
           <small>
-            @if (receitasSelecionadas() > 0) { +{{ receitasSelecionadas() | currency:'BRL' }} }
-            @if (despesasSelecionadas() > 0) { -{{ despesasSelecionadas() | currency:'BRL' }} }
+            @if (getReceitasSel() > 0) { +{{ getReceitasSel() | currency:'BRL' }} }
+            @if (getDespesasSel() > 0) { -{{ getDespesasSel() | currency:'BRL' }} }
           </small>
         </div>
       }
@@ -463,19 +463,17 @@ export class LancamentosComponent implements OnInit {
 
   saldo = computed(() => this.totalReceitas() - this.totalDespesas());
 
-  totalSelecionado = computed(() => {
-    const rec = this.selectedLancamentos.filter((l) => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
-    const desp = this.selectedLancamentos.filter((l) => l.tipo === 'despesa').reduce((s, l) => s + Number(l.valor), 0);
-    return rec - desp;
-  });
+  getReceitasSel(): number {
+    return this.selectedLancamentos.filter((l) => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0);
+  }
 
-  receitasSelecionadas = computed(() =>
-    this.selectedLancamentos.filter((l) => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0),
-  );
+  getDespesasSel(): number {
+    return this.selectedLancamentos.filter((l) => l.tipo === 'despesa').reduce((s, l) => s + Number(l.valor), 0);
+  }
 
-  despesasSelecionadas = computed(() =>
-    this.selectedLancamentos.filter((l) => l.tipo === 'despesa').reduce((s, l) => s + Number(l.valor), 0),
-  );
+  getSaldoSelecionado(): number {
+    return this.getReceitasSel() - this.getDespesasSel();
+  }
 
   qtdReceitas = computed(() =>
     this.lancamentoService.lancamentos().filter((l) => l.tipo === 'receita' && l.status !== 'cancelado').length,
