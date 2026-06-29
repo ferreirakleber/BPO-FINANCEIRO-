@@ -346,7 +346,11 @@ export class ImportacaoComponent implements OnInit {
     plugins: { legend: { display: false } },
   };
 
-  canAdvanceStep1 = computed(() => !!this.empresaSelecionadaId && this.linhas().length > 0);
+  canAdvanceStep1 = computed(() => {
+    const ok = !!this.empresaSelecionadaId && this.linhas().length > 0;
+    console.log('canAdvance:', ok, 'empresa:', this.empresaSelecionadaId, 'linhas:', this.linhas().length);
+    return ok;
+  });
 
   qtdAberto = computed(() => this.linhas().filter((l) => l.situacao === 'Em aberto').length);
   qtdPago = computed(() => this.linhas().filter((l) => l.situacao !== 'Em aberto').length);
@@ -525,6 +529,7 @@ export class ImportacaoComponent implements OnInit {
   }
 
   nextStep() {
+    console.log('nextStep called, current:', this.activeStep(), 'linhas:', this.linhas().length);
     if (this.activeStep() < 2) this.activeStep.set(this.activeStep() + 1);
   }
 

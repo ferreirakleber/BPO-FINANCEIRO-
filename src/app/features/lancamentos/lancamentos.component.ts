@@ -35,7 +35,15 @@ import { Lancamento, TipoLancamento, StatusLancamento } from '../../core/models/
     <div class="page-header">
       <h2>Lançamentos Financeiros</h2>
       <div class="header-actions">
-        <p-button label="Importar CSV" icon="pi pi-upload" severity="secondary" (onClick)="importDialogVisible = true" />
+        @if (selectedLancamentos.length > 0) {
+          <p-button
+            label="Excluir Selecionados ({{ selectedLancamentos.length }})"
+            icon="pi pi-trash"
+            severity="danger"
+            (onClick)="excluirSelecionados()"
+          />
+        }
+        <p-button label="Importar Excel" icon="pi pi-file-excel" severity="secondary" (onClick)="importDialogVisible = true" />
         <p-button label="Novo Lançamento" icon="pi pi-plus" (onClick)="openNew()" />
       </div>
     </div>
@@ -98,10 +106,14 @@ import { Lancamento, TipoLancamento, StatusLancamento } from '../../core/models/
       [paginator]="true"
       [rows]="15"
       [rowHover]="true"
+      [(selection)]="selectedLancamentos"
       styleClass="p-datatable-striped p-datatable-sm"
     >
       <ng-template pTemplate="header">
         <tr>
+          <th style="width: 50px">
+            <p-tableHeaderCheckbox />
+          </th>
           <th>Vencimento</th>
           <th>Descrição</th>
           <th>Tipo</th>
@@ -113,6 +125,9 @@ import { Lancamento, TipoLancamento, StatusLancamento } from '../../core/models/
       </ng-template>
       <ng-template pTemplate="body" let-lanc>
         <tr>
+          <td>
+            <p-tableCheckbox [value]="lanc" />
+          </td>
           <td>{{ lanc.data_vencimento | date:'dd/MM/yyyy' }}</td>
           <td>
             {{ lanc.descricao }}
@@ -152,7 +167,7 @@ import { Lancamento, TipoLancamento, StatusLancamento } from '../../core/models/
       </ng-template>
       <ng-template pTemplate="emptymessage">
         <tr>
-          <td colspan="7" style="text-align: center">Nenhum lançamento encontrado</td>
+          <td colspan="8" style="text-align: center">Nenhum lançamento encontrado</td>
         </tr>
       </ng-template>
     </p-table>
@@ -335,6 +350,7 @@ export class LancamentosComponent implements OnInit {
   editingId: string | null = null;
   saving = signal(false);
   importing = signal(false);
+  selectedLancamentos: Lancamento[] = [];
   importPreview = signal<Partial<Lancamento>[]>([]);
   form: Partial<Lancamento> = {};
   formDataVencimento: Date | null = null;
@@ -449,6 +465,24 @@ export class LancamentosComponent implements OnInit {
         const status: StatusLancamento = lanc.tipo === 'receita' ? 'recebido' : 'pago';
         await this.lancamentoService.updateStatus(lanc.id, status, new Date().toISOString().split('T')[0]);
         this.messageService.add({ severity: 'success', summary: `Lançamento ${status}` });
+      },
+    });
+  }
+
+  excluirSelecionados() {
+    this.confirmationService.confirm({
+      message: `Deseja excluir permanentemente ${this.selectedLancamentos.length} lançamentos selecionados?`,
+      header: 'Excluir em massa',
+      icon: 'pi pi-exclamation-triangle',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: async () => {
+        const ids = this.selectedLancamentos.map((l) => l.id);
+        for (const id of ids) {
+          await this.lancamentoService.delete(id);
+        }
+        this.selectedLancamentos = [];
+        await this.lancamentoService.loadLancamentos();
+        this.messageService.add({ severity: 'success', summary: `${ids.length} lançamentos excluídos` });
       },
     });
   }
