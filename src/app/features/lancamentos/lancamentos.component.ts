@@ -88,21 +88,53 @@ import { Lancamento, TipoLancamento, StatusLancamento } from '../../core/models/
       />
     </div>
 
-    <!-- Resumo -->
+    <!-- Resumo Geral -->
     <div class="summary-cards">
       <div class="summary-card receitas">
         <span>Receitas</span>
         <strong>{{ totalReceitas() | currency:'BRL' }}</strong>
+        <small>{{ qtdReceitas() }} lançamentos</small>
       </div>
       <div class="summary-card despesas">
         <span>Despesas</span>
         <strong>{{ totalDespesas() | currency:'BRL' }}</strong>
+        <small>{{ qtdDespesas() }} lançamentos</small>
       </div>
       <div class="summary-card saldo">
         <span>Saldo</span>
         <strong>{{ saldo() | currency:'BRL' }}</strong>
       </div>
     </div>
+
+    <!-- Resumo por Categoria -->
+    @if (categorias().length > 0) {
+      <div class="categorias-resumo">
+        <div class="cat-header" (click)="categoriasExpanded = !categoriasExpanded">
+          <i [class]="categoriasExpanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"></i>
+          <strong>Resumo por Categoria ({{ categorias().length }})</strong>
+        </div>
+        @if (categoriasExpanded) {
+          <div class="cat-grid">
+            @for (cat of categorias(); track cat.nome) {
+              <div class="cat-item">
+                <div class="cat-info">
+                  <span class="cat-nome">{{ cat.nome }}</span>
+                  <small>{{ cat.qtd }} lançamentos</small>
+                </div>
+                <div class="cat-valores">
+                  @if (cat.receitas > 0) {
+                    <span class="cat-rec">+{{ cat.receitas | currency:'BRL' }}</span>
+                  }
+                  @if (cat.despesas > 0) {
+                    <span class="cat-desp">-{{ cat.despesas | currency:'BRL' }}</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
 
     <p-table
       #dt
@@ -338,6 +370,28 @@ import { Lancamento, TipoLancamento, StatusLancamento } from '../../core/models/
     .summary-card.receitas { background: #dcfce7; color: #166534; }
     .summary-card.despesas { background: #fee2e2; color: #991b1b; }
     .summary-card.saldo { background: #dbeafe; color: #1e40af; }
+    .summary-card small { font-size: 0.75rem; opacity: 0.7; margin-top: 0.15rem; }
+
+    .categorias-resumo {
+      margin-bottom: 1.5rem; background: var(--surface-card);
+      border: 1px solid var(--surface-border); border-radius: 8px; overflow: hidden;
+    }
+    .cat-header {
+      display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem;
+      background: var(--surface-50); cursor: pointer; font-size: 0.9rem;
+    }
+    .cat-header:hover { background: var(--surface-100); }
+    .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0; }
+    .cat-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.6rem 1rem; border-bottom: 1px solid var(--surface-100);
+    }
+    .cat-item:last-child { border-bottom: none; }
+    .cat-nome { font-weight: 600; font-size: 0.85rem; }
+    .cat-info small { display: block; color: var(--text-color-secondary); font-size: 0.75rem; }
+    .cat-valores { display: flex; gap: 0.75rem; font-size: 0.85rem; font-weight: 600; }
+    .cat-rec { color: #22c55e; }
+    .cat-desp { color: #ef4444; }
 
     .field { margin-bottom: 1rem; }
     .field label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
@@ -379,19 +433,47 @@ export class LancamentosComponent implements OnInit {
   planoContasOptions = signal<{ label: string; value: string }[]>([]);
   contaBancariaOptions = signal<{ label: string; value: string }[]>([]);
 
+  categoriasExpanded = false;
+
   totalReceitas = computed(() =>
     this.lancamentoService.lancamentos()
       .filter((l) => l.tipo === 'receita' && l.status !== 'cancelado')
-      .reduce((sum, l) => sum + l.valor, 0),
+      .reduce((sum, l) => sum + Number(l.valor), 0),
   );
 
   totalDespesas = computed(() =>
     this.lancamentoService.lancamentos()
       .filter((l) => l.tipo === 'despesa' && l.status !== 'cancelado')
-      .reduce((sum, l) => sum + l.valor, 0),
+      .reduce((sum, l) => sum + Number(l.valor), 0),
   );
 
   saldo = computed(() => this.totalReceitas() - this.totalDespesas());
+
+  qtdReceitas = computed(() =>
+    this.lancamentoService.lancamentos().filter((l) => l.tipo === 'receita' && l.status !== 'cancelado').length,
+  );
+
+  qtdDespesas = computed(() =>
+    this.lancamentoService.lancamentos().filter((l) => l.tipo === 'despesa' && l.status !== 'cancelado').length,
+  );
+
+  categorias = computed(() => {
+    const lancs = this.lancamentoService.lancamentos().filter((l) => l.status !== 'cancelado');
+    const map: Record<string, { nome: string; receitas: number; despesas: number; qtd: number }> = {};
+
+    for (const l of lancs) {
+      const nome = l.plano_conta?.descricao ?? l.fornecedor_cliente ?? 'Sem categoria';
+      if (!map[nome]) map[nome] = { nome, receitas: 0, despesas: 0, qtd: 0 };
+      map[nome].qtd++;
+      if (l.tipo === 'receita') {
+        map[nome].receitas += Number(l.valor);
+      } else {
+        map[nome].despesas += Number(l.valor);
+      }
+    }
+
+    return Object.values(map).sort((a, b) => (b.receitas + b.despesas) - (a.receitas + a.despesas));
+  });
 
   constructor(
     public lancamentoService: LancamentoService,
