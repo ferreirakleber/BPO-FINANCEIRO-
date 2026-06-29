@@ -6,12 +6,16 @@ import { CardModule } from 'primeng/card';
 import { TagModule } from 'primeng/tag';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { InputNumberModule } from 'primeng/inputnumber';
+import { DropdownModule } from 'primeng/dropdown';
 import { ToastModule } from 'primeng/toast';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { SupabaseService } from '../../core/services/supabase.service';
 import { EmpresaService } from '../../core/services/empresa.service';
 import { LancamentoService } from '../../core/services/lancamento.service';
+import { PlanoContasService } from '../../core/services/plano-contas.service';
 import { Lancamento, StatusLancamento } from '../../core/models/lancamento.model';
 
 interface DiaAgenda {
@@ -30,7 +34,8 @@ interface DiaAgenda {
   standalone: true,
   imports: [
     CommonModule, FormsModule, CalendarModule, CardModule, TagModule,
-    ButtonModule, DialogModule, ToastModule, ConfirmDialogModule,
+    ButtonModule, DialogModule, InputTextModule, InputNumberModule,
+    DropdownModule, ToastModule, ConfirmDialogModule,
   ],
   providers: [ConfirmationService, MessageService],
   template: `
@@ -40,6 +45,7 @@ interface DiaAgenda {
         <p-button icon="pi pi-chevron-left" [rounded]="true" [text]="true" (onClick)="mesAnterior()" />
         <span class="mes-label">{{ mesAnoLabel() }}</span>
         <p-button icon="pi pi-chevron-right" [rounded]="true" [text]="true" (onClick)="mesSeguinte()" />
+        <p-button label="Novo Lançamento" icon="pi pi-plus" (onClick)="openNew()" styleClass="ml-3" />
       </div>
     </div>
 
@@ -137,6 +143,63 @@ interface DiaAgenda {
       }
     </div>
 
+    <!-- Dialog Novo Lançamento -->
+    <p-dialog
+      [(visible)]="dialogVisible"
+      header="Novo Lançamento"
+      [modal]="true"
+      [style]="{ width: '550px' }"
+    >
+      <div class="field">
+        <label>Descrição</label>
+        <input pInputText [(ngModel)]="form.descricao" class="w-full" />
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Tipo</label>
+          <p-dropdown
+            [(ngModel)]="form.tipo"
+            [options]="tiposOptions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Selecione"
+            styleClass="w-full"
+          />
+        </div>
+        <div class="field">
+          <label>Valor</label>
+          <p-inputNumber [(ngModel)]="form.valor" mode="currency" currency="BRL" locale="pt-BR" styleClass="w-full" />
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Vencimento</label>
+          <p-calendar [(ngModel)]="formDataVencimento" dateFormat="dd/mm/yy" [showIcon]="true" styleClass="w-full" />
+        </div>
+        <div class="field">
+          <label>Categoria</label>
+          <p-dropdown
+            [(ngModel)]="form.plano_conta_id"
+            [options]="planoContasOptions()"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Selecione"
+            [filter]="true"
+            styleClass="w-full"
+          />
+        </div>
+      </div>
+      <div class="field">
+        <label>Fornecedor / Cliente</label>
+        <input pInputText [(ngModel)]="form.fornecedor_cliente" class="w-full" />
+      </div>
+
+      <ng-template pTemplate="footer">
+        <p-button label="Cancelar" [text]="true" (onClick)="dialogVisible = false" />
+        <p-button label="Salvar" icon="pi pi-check" (onClick)="save()" [loading]="saving()" />
+      </ng-template>
+    </p-dialog>
+
     <p-confirmDialog />
     <p-toast />
   `,
@@ -208,6 +271,11 @@ interface DiaAgenda {
       color: var(--text-color-secondary);
     }
     .empty-state p { margin-top: 1rem; }
+
+    .field { margin-bottom: 1rem; }
+    .field label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
+    .field-row { display: flex; gap: 1rem; }
+    .field-row .field { flex: 1; }
   `,
 })
 export class CalendarioComponent implements OnInit {
@@ -279,16 +347,39 @@ export class CalendarioComponent implements OnInit {
     return this.lancamentos().filter((l) => l.status === 'pendente' && l.data_vencimento < hoje).length;
   });
 
+  dialogVisible = false;
+  saving = signal(false);
+  form: Partial<Lancamento> = {};
+  formDataVencimento: Date | null = null;
+
+  tiposOptions = [
+    { label: 'Despesa (Pagar)', value: 'despesa' },
+    { label: 'Receita (Receber)', value: 'receita' },
+  ];
+
+  planoContasOptions = signal<{ label: string; value: string }[]>([]);
+
   constructor(
     private supabase: SupabaseService,
     private empresaService: EmpresaService,
     private lancamentoService: LancamentoService,
+    private planoContasService: PlanoContasService,
     private confirmationService: ConfirmationService,
     private messageService: MessageService,
   ) {}
 
   async ngOnInit() {
-    await this.loadLancamentos();
+    await Promise.all([
+      this.loadLancamentos(),
+      this.planoContasService.loadContas(),
+    ]);
+
+    this.planoContasOptions.set(
+      this.planoContasService.contas().map((c) => ({
+        label: `${c.codigo} - ${c.descricao}`,
+        value: c.id,
+      })),
+    );
   }
 
   async loadLancamentos() {
@@ -331,6 +422,29 @@ export class CalendarioComponent implements OnInit {
       this.mesAtual.set(this.mesAtual() + 1);
     }
     this.loadLancamentos();
+  }
+
+  openNew() {
+    this.form = { tipo: 'despesa', status: 'pendente' };
+    this.formDataVencimento = null;
+    this.dialogVisible = true;
+  }
+
+  async save() {
+    if (!this.form.descricao || !this.form.tipo || !this.form.valor || !this.formDataVencimento || !this.form.plano_conta_id) {
+      this.messageService.add({ severity: 'warn', summary: 'Preencha todos os campos obrigatórios' });
+      return;
+    }
+
+    this.form.data_vencimento = this.formDataVencimento.toISOString().split('T')[0];
+    this.saving.set(true);
+
+    await this.lancamentoService.create(this.form);
+    await this.loadLancamentos();
+    this.messageService.add({ severity: 'success', summary: 'Lançamento criado' });
+
+    this.saving.set(false);
+    this.dialogVisible = false;
   }
 
   confirmarPagamento(lanc: Lancamento) {
