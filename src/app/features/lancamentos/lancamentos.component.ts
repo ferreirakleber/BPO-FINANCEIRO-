@@ -553,12 +553,17 @@ export class LancamentosComponent implements OnInit {
     const rows = this.importPreview();
     if (rows.length === 0) return;
 
+    const defaultPlano = this.planoContasService.contas()[0];
+    if (!defaultPlano) {
+      this.messageService.add({ severity: 'error', summary: 'Cadastre ao menos uma conta no Plano de Contas antes de importar' });
+      return;
+    }
+
     this.importing.set(true);
 
-    const defaultPlano = this.planoContasService.contas()[0];
     const rowsWithPlano = rows.map((r) => ({
       ...r,
-      plano_conta_id: defaultPlano?.id,
+      plano_conta_id: defaultPlano.id,
     }));
 
     const count = await this.lancamentoService.importFromCsv(rowsWithPlano);

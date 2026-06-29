@@ -8,8 +8,10 @@ export const authGuard: CanActivateFn = async () => {
 
   if (auth.loading()) {
     await new Promise<void>((resolve) => {
+      let elapsed = 0;
       const interval = setInterval(() => {
-        if (!auth.loading()) {
+        elapsed += 50;
+        if (!auth.loading() || elapsed > 5000) {
           clearInterval(interval);
           resolve();
         }
