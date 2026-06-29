@@ -32,6 +32,11 @@ import { AuthService } from '../../../core/services/auth.service';
           </a>
         }
 
+        <a routerLink="/importacao" routerLinkActive="active" class="nav-item">
+          <i class="pi pi-file-excel"></i>
+          <span>Importar Extratos</span>
+        </a>
+
         <a routerLink="/dre" routerLinkActive="active" class="nav-item">
           <i class="pi pi-chart-bar"></i>
           <span>DRE</span>

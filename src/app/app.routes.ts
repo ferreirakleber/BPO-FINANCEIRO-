@@ -42,6 +42,13 @@ export const routes: Routes = [
         canActivate: [roleGuard('admin_geral')],
       },
       {
+        path: 'importacao',
+        loadComponent: () =>
+          import('./features/importacao/importacao.component').then(
+            (m) => m.ImportacaoComponent,
+          ),
+      },
+      {
         path: 'calendario',
         loadComponent: () =>
           import('./features/calendario/calendario.component').then(

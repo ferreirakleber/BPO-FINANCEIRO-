@@ -102,6 +102,14 @@ export class LancamentoService {
     return !error;
   }
 
+  async supabaseInsert(lancamentos: any[]): Promise<{ data: any[] | null }> {
+    const { data } = await this.supabaseService.supabase
+      .from('lancamentos')
+      .insert(lancamentos)
+      .select();
+    return { data };
+  }
+
   async importFromCsv(rows: Partial<Lancamento>[]): Promise<number> {
     const empresaId = this.empresaService.empresaAtivaId();
     if (!empresaId) return 0;
