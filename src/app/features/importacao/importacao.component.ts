@@ -8,6 +8,7 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { StepsModule } from 'primeng/steps';
 import { ToastModule } from 'primeng/toast';
+import { DialogModule } from 'primeng/dialog';
 import { MessageService, MenuItem } from 'primeng/api';
 import { TabViewModule } from 'primeng/tabview';
 import { ChartModule } from 'primeng/chart';
@@ -65,7 +66,7 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
   standalone: true,
   imports: [
     CommonModule, FormsModule, CardModule, ButtonModule, DropdownModule,
-    TableModule, TagModule, StepsModule, ToastModule, TabViewModule, ChartModule,
+    TableModule, TagModule, StepsModule, ToastModule, TabViewModule, ChartModule, DialogModule,
   ],
   providers: [MessageService],
   template: `
@@ -226,27 +227,81 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
                     <th>Descrição</th>
                     <th class="text-right">Valor (R$)</th>
                     <th class="text-right">% Receita</th>
+                    <th class="text-right" style="width: 80px">Qtd</th>
+                    <th style="width: 60px"></th>
                   </tr>
                 </thead>
                 <tbody>
                   @for (linha of dreResult()!.linhas; track linha.label) {
-                    <tr [class]="linha.tipo === 'resultado' ? 'result-row' : ''">
+                    <tr [class]="linha.tipo === 'resultado' ? 'result-row' : 'clickable-row'" (click)="linha.detalhes?.length ? openDetalhes(linha) : null">
                       <td [class]="linha.tipo === 'resultado' ? 'bold' : ''">{{ linha.label }}</td>
                       <td class="text-right" [class]="getValorClass(linha)">{{ linha.valor | currency:'BRL' }}</td>
                       <td class="text-right">{{ linha.percentual | number:'1.1-1' }}%</td>
+                      <td class="text-right">{{ linha.detalhes?.length ?? '' }}</td>
+                      <td>
+                        @if (linha.detalhes?.length) {
+                          <i class="pi pi-search" style="cursor: pointer; color: var(--primary-color)"></i>
+                        }
+                      </td>
                     </tr>
                     @if (linha.children) {
                       @for (child of linha.children; track child.label) {
-                        <tr class="child-row">
+                        <tr class="child-row clickable-row" (click)="child.detalhes?.length ? openDetalhes(child) : null">
                           <td style="padding-left: 2rem">{{ child.label }}</td>
                           <td class="text-right">{{ child.valor | currency:'BRL' }}</td>
                           <td class="text-right">{{ child.percentual | number:'1.1-1' }}%</td>
+                          <td class="text-right">{{ child.detalhes?.length ?? '' }}</td>
+                          <td>
+                            @if (child.detalhes?.length) {
+                              <i class="pi pi-search" style="cursor: pointer; color: var(--primary-color)"></i>
+                            }
+                          </td>
                         </tr>
                       }
                     }
                   }
                 </tbody>
               </table>
+
+              <!-- Dialog detalhes -->
+              <p-dialog
+                [(visible)]="detalhesVisible"
+                [header]="detalhesLabel"
+                [modal]="true"
+                [style]="{ width: '800px' }"
+              >
+                <p-table
+                  [value]="detalhesLancamentos"
+                  [paginator]="true"
+                  [rows]="15"
+                  styleClass="p-datatable-sm p-datatable-striped"
+                >
+                  <ng-template pTemplate="header">
+                    <tr>
+                      <th>Data</th>
+                      <th>Descrição</th>
+                      <th>Categoria</th>
+                      <th>Fornecedor/Cliente</th>
+                      <th class="text-right">Valor</th>
+                    </tr>
+                  </ng-template>
+                  <ng-template pTemplate="body" let-d>
+                    <tr>
+                      <td>{{ d.data_vencimento | date:'dd/MM/yyyy' }}</td>
+                      <td>{{ d.descricao }}</td>
+                      <td>{{ d.categoria }}</td>
+                      <td>{{ d.fornecedor_cliente || '-' }}</td>
+                      <td class="text-right" style="font-weight: 600">{{ d.valor | currency:'BRL' }}</td>
+                    </tr>
+                  </ng-template>
+                  <ng-template pTemplate="footer">
+                    <tr>
+                      <td colspan="4" class="bold">Total</td>
+                      <td class="text-right bold">{{ detalhesTotal | currency:'BRL' }}</td>
+                    </tr>
+                  </ng-template>
+                </p-table>
+              </p-dialog>
             </p-tabPanel>
             <p-tabPanel header="Gráfico">
               @if (dreChartData()) {
@@ -307,6 +362,8 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
     .result-row { background: var(--surface-50); }
     .result-row td { font-weight: 700; }
     .child-row td { font-size: 0.9rem; color: var(--text-color-secondary); }
+    .clickable-row { cursor: pointer; }
+    .clickable-row:hover { background: var(--surface-hover); }
   `,
 })
 export class ImportacaoComponent implements OnInit {
@@ -317,6 +374,10 @@ export class ImportacaoComponent implements OnInit {
   dreResult = signal<DreData | null>(null);
   lancamentosImportados = signal(0);
   empresaSelecionadaId: string | null = null;
+  detalhesVisible = false;
+  detalhesLabel = '';
+  detalhesLancamentos: any[] = [];
+  detalhesTotal = 0;
 
   steps: MenuItem[] = [
     { label: 'Upload' },
@@ -603,6 +664,13 @@ export class ImportacaoComponent implements OnInit {
     msg += `\n\n_Enviado via BPO Financeiro_`;
 
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+
+  openDetalhes(linha: any) {
+    this.detalhesLabel = linha.label;
+    this.detalhesLancamentos = linha.detalhes ?? [];
+    this.detalhesTotal = this.detalhesLancamentos.reduce((s: number, d: any) => s + d.valor, 0);
+    this.detalhesVisible = true;
   }
 
   getValorClass(linha: any): string {

@@ -1,5 +1,14 @@
 import { GrupoDre } from './plano-contas.model';
 
+export interface DreLancamentoDetalhe {
+  id: string;
+  descricao: string;
+  valor: number;
+  data_vencimento: string;
+  fornecedor_cliente: string | null;
+  categoria: string;
+}
+
 export interface DreLinha {
   grupo: GrupoDre;
   label: string;
@@ -7,6 +16,7 @@ export interface DreLinha {
   percentual: number;
   tipo: 'receita' | 'deducao' | 'custo' | 'despesa' | 'resultado';
   children?: DreLinha[];
+  detalhes?: DreLancamentoDetalhe[];
 }
 
 export interface DreData {

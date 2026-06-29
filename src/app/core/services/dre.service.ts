@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { SupabaseService } from './supabase.service';
 import { EmpresaService } from './empresa.service';
-import { DreData, DreLinha } from '../models/dre.model';
+import { DreData, DreLinha, DreLancamentoDetalhe } from '../models/dre.model';
 import { GrupoDre } from '../models/plano-contas.model';
 
 const GRUPO_LABELS: Record<GrupoDre, string> = {
@@ -34,23 +34,43 @@ export class DreService {
     private empresaService: EmpresaService,
   ) {}
 
-  async loadDre(empresaId: string, dataInicio: string, dataFim: string, empresaNome?: string): Promise<DreData> {
-    const { data: lancamentos } = await this.supabaseService.supabase
+  async loadDreLancamentos(empresaId: string, dataInicio: string, dataFim: string): Promise<any[]> {
+    const { data } = await this.supabaseService.supabase
       .from('lancamentos')
-      .select('valor, tipo, plano_conta:plano_contas(grupo_dre)')
+      .select('id, descricao, valor, tipo, data_vencimento, status, fornecedor_cliente, plano_conta:plano_contas(codigo, descricao, grupo_dre)')
       .eq('empresa_id', empresaId)
       .in('status', ['pago', 'recebido'])
       .gte('data_vencimento', dataInicio)
-      .lte('data_vencimento', dataFim);
+      .lte('data_vencimento', dataFim)
+      .order('data_vencimento');
+
+    return data ?? [];
+  }
+
+  async loadDre(empresaId: string, dataInicio: string, dataFim: string, empresaNome?: string): Promise<DreData> {
+    const lancamentos = await this.loadDreLancamentos(empresaId, dataInicio, dataFim);
 
     const totais: Record<string, number> = {};
-    for (const l of (lancamentos ?? [])) {
+    const detalhesPorGrupo: Record<string, any[]> = {};
+
+    for (const l of lancamentos) {
       const grupo = (l as any).plano_conta?.grupo_dre;
       if (!grupo) continue;
       totais[grupo] = (totais[grupo] ?? 0) + Number(l.valor);
+
+      if (!detalhesPorGrupo[grupo]) detalhesPorGrupo[grupo] = [];
+      detalhesPorGrupo[grupo].push({
+        id: l.id,
+        descricao: l.descricao,
+        valor: Number(l.valor),
+        data_vencimento: l.data_vencimento,
+        fornecedor_cliente: l.fornecedor_cliente,
+        categoria: (l as any).plano_conta?.descricao ?? '',
+      });
     }
 
     const get = (g: GrupoDre) => totais[g] ?? 0;
+    const getDetalhes = (g: GrupoDre) => detalhesPorGrupo[g] ?? [];
 
     const receita_bruta = get('receita_bruta');
     const deducoes = get('deducoes');
@@ -77,27 +97,27 @@ export class DreService {
     const pct = (v: number) => receita_bruta > 0 ? (v / receita_bruta) * 100 : 0;
 
     const linhas: DreLinha[] = [
-      { grupo: 'receita_bruta', label: 'Receita Bruta', valor: receita_bruta, percentual: 100, tipo: 'receita' },
-      { grupo: 'deducoes', label: '(-) Deduções', valor: deducoes, percentual: pct(deducoes), tipo: 'deducao' },
+      { grupo: 'receita_bruta', label: 'Receita Bruta', valor: receita_bruta, percentual: 100, tipo: 'receita', detalhes: getDetalhes('receita_bruta') },
+      { grupo: 'deducoes', label: '(-) Deduções', valor: deducoes, percentual: pct(deducoes), tipo: 'deducao', detalhes: getDetalhes('deducoes') },
       { grupo: 'receita_bruta', label: '= Receita Líquida', valor: receita_liquida, percentual: pct(receita_liquida), tipo: 'resultado' },
-      { grupo: 'custos', label: '(-) Custos', valor: custos, percentual: pct(custos), tipo: 'custo' },
+      { grupo: 'custos', label: '(-) Custos', valor: custos, percentual: pct(custos), tipo: 'custo', detalhes: getDetalhes('custos') },
       { grupo: 'custos', label: '= Lucro Bruto', valor: lucro_bruto, percentual: pct(lucro_bruto), tipo: 'resultado' },
       {
         grupo: 'desp_admin', label: '(-) Despesas Operacionais', valor: total_despesas_operacionais, percentual: pct(total_despesas_operacionais), tipo: 'despesa',
         children: [
-          { grupo: 'desp_admin', label: 'Administrativas', valor: despesas_admin, percentual: pct(despesas_admin), tipo: 'despesa' },
-          { grupo: 'desp_comercial', label: 'Comerciais', valor: despesas_comercial, percentual: pct(despesas_comercial), tipo: 'despesa' },
-          { grupo: 'desp_financeira', label: 'Financeiras', valor: despesas_financeira, percentual: pct(despesas_financeira), tipo: 'despesa' },
-          { grupo: 'desp_tributaria', label: 'Tributárias', valor: despesas_tributaria, percentual: pct(despesas_tributaria), tipo: 'despesa' },
-          { grupo: 'desp_pessoal', label: 'Pessoal', valor: despesas_pessoal, percentual: pct(despesas_pessoal), tipo: 'despesa' },
-          { grupo: 'desp_marketing', label: 'Marketing', valor: despesas_marketing, percentual: pct(despesas_marketing), tipo: 'despesa' },
-          { grupo: 'desp_operacional', label: 'Operacionais Gerais', valor: despesas_operacional, percentual: pct(despesas_operacional), tipo: 'despesa' },
+          { grupo: 'desp_admin', label: 'Administrativas', valor: despesas_admin, percentual: pct(despesas_admin), tipo: 'despesa', detalhes: getDetalhes('desp_admin') },
+          { grupo: 'desp_comercial', label: 'Comerciais', valor: despesas_comercial, percentual: pct(despesas_comercial), tipo: 'despesa', detalhes: getDetalhes('desp_comercial') },
+          { grupo: 'desp_financeira', label: 'Financeiras', valor: despesas_financeira, percentual: pct(despesas_financeira), tipo: 'despesa', detalhes: getDetalhes('desp_financeira') },
+          { grupo: 'desp_tributaria', label: 'Tributárias', valor: despesas_tributaria, percentual: pct(despesas_tributaria), tipo: 'despesa', detalhes: getDetalhes('desp_tributaria') },
+          { grupo: 'desp_pessoal', label: 'Pessoal', valor: despesas_pessoal, percentual: pct(despesas_pessoal), tipo: 'despesa', detalhes: getDetalhes('desp_pessoal') },
+          { grupo: 'desp_marketing', label: 'Marketing', valor: despesas_marketing, percentual: pct(despesas_marketing), tipo: 'despesa', detalhes: getDetalhes('desp_marketing') },
+          { grupo: 'desp_operacional', label: 'Operacionais Gerais', valor: despesas_operacional, percentual: pct(despesas_operacional), tipo: 'despesa', detalhes: getDetalhes('desp_operacional') },
         ],
       },
       { grupo: 'desp_operacional', label: '= Resultado Operacional', valor: resultado_operacional, percentual: pct(resultado_operacional), tipo: 'resultado' },
-      { grupo: 'outras_receitas_despesas', label: '(+/-) Outras Receitas/Despesas', valor: outras_receitas_despesas, percentual: pct(outras_receitas_despesas), tipo: 'receita' },
+      { grupo: 'outras_receitas_despesas', label: '(+/-) Outras Receitas/Despesas', valor: outras_receitas_despesas, percentual: pct(outras_receitas_despesas), tipo: 'receita', detalhes: getDetalhes('outras_receitas_despesas') },
       { grupo: 'outras_receitas_despesas', label: '= Lucro Antes do IR', valor: lucro_antes_ir, percentual: pct(lucro_antes_ir), tipo: 'resultado' },
-      { grupo: 'ir_csll', label: '(-) IR / CSLL', valor: ir_csll, percentual: pct(ir_csll), tipo: 'despesa' },
+      { grupo: 'ir_csll', label: '(-) IR / CSLL', valor: ir_csll, percentual: pct(ir_csll), tipo: 'despesa', detalhes: getDetalhes('ir_csll') },
       { grupo: 'ir_csll', label: '= Lucro Líquido', valor: lucro_liquido, percentual: pct(lucro_liquido), tipo: 'resultado' },
     ];
 
