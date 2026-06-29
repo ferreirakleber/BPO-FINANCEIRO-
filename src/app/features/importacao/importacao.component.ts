@@ -16,63 +16,48 @@ import { EmpresaService } from '../../core/services/empresa.service';
 import { PlanoContasService } from '../../core/services/plano-contas.service';
 import { LancamentoService } from '../../core/services/lancamento.service';
 import { DreService } from '../../core/services/dre.service';
-import { AuthService } from '../../core/services/auth.service';
-import { Empresa } from '../../core/models/empresa.model';
 import { PlanoConta, GrupoDre } from '../../core/models/plano-contas.model';
 import { DreData } from '../../core/models/dre.model';
 
 interface LinhaExtrato {
-  data: string;
+  dataVencimento: string;
+  dataCompetencia: string;
   descricao: string;
   valor: number;
-  tipo: 'receita' | 'despesa';
+  valorPago: number;
+  valorAberto: number;
+  situacao: string;
   categoria: string;
-  grupoDre: GrupoDre | null;
-  planoContaId: string | null;
+  contaBancaria: string;
+  formaPagamento: string;
+  notaFiscal: string;
+  observacoes: string;
+  recorrencia: string;
+  grupoDre: GrupoDre;
+  selecionado: boolean;
 }
 
 const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
-  'receita': 'receita_bruta',
-  'receitas': 'receita_bruta',
-  'faturamento': 'receita_bruta',
-  'vendas': 'receita_bruta',
-  'servicos': 'receita_bruta',
-  'serviços': 'receita_bruta',
-  'imposto': 'deducoes',
-  'impostos': 'deducoes',
-  'deducao': 'deducoes',
-  'deducoes': 'deducoes',
-  'deduções': 'deducoes',
-  'custo': 'custos',
-  'custos': 'custos',
-  'cmv': 'custos',
-  'csp': 'custos',
-  'administrativo': 'desp_admin',
-  'administrativa': 'desp_admin',
-  'admin': 'desp_admin',
-  'aluguel': 'desp_admin',
-  'comercial': 'desp_comercial',
-  'comissao': 'desp_comercial',
-  'comissão': 'desp_comercial',
-  'financeiro': 'desp_financeira',
-  'financeira': 'desp_financeira',
-  'juros': 'desp_financeira',
-  'tarifa': 'desp_financeira',
-  'tarifas': 'desp_financeira',
-  'tributo': 'desp_tributaria',
-  'tributaria': 'desp_tributaria',
-  'tributário': 'desp_tributaria',
-  'pessoal': 'desp_pessoal',
-  'salario': 'desp_pessoal',
-  'salário': 'desp_pessoal',
-  'folha': 'desp_pessoal',
-  'marketing': 'desp_marketing',
-  'publicidade': 'desp_marketing',
-  'propaganda': 'desp_marketing',
-  'operacional': 'desp_operacional',
-  'ir': 'ir_csll',
-  'csll': 'ir_csll',
-  'irpj': 'ir_csll',
+  'receita': 'receita_bruta', 'faturamento': 'receita_bruta', 'vendas': 'receita_bruta',
+  'imposto': 'deducoes', 'impostos': 'deducoes',
+  'custo': 'custos', 'cmv': 'custos', 'csp': 'custos',
+  'administrativ': 'desp_admin', 'aluguel': 'desp_admin', 'locação': 'desp_admin',
+  'limpeza': 'desp_admin', 'manutenção': 'desp_admin', 'manutencao': 'desp_admin',
+  'escritorio': 'desp_admin', 'escritório': 'desp_admin',
+  'comercial': 'desp_comercial', 'comissao': 'desp_comercial', 'comissão': 'desp_comercial',
+  'financeiro': 'desp_financeira', 'financeira': 'desp_financeira', 'juros': 'desp_financeira',
+  'tarifa': 'desp_financeira', 'banco': 'desp_financeira', 'iof': 'desp_financeira',
+  'tribut': 'desp_tributaria', 'das': 'desp_tributaria', 'simples': 'desp_tributaria',
+  'inss': 'desp_tributaria', 'fgts': 'desp_tributaria', 'irrf': 'desp_tributaria',
+  'pessoal': 'desp_pessoal', 'salario': 'desp_pessoal', 'salário': 'desp_pessoal',
+  'folha': 'desp_pessoal', 'prolabore': 'desp_pessoal', 'pró-labore': 'desp_pessoal',
+  'vale': 'desp_pessoal', 'beneficio': 'desp_pessoal', 'benefício': 'desp_pessoal',
+  'reembolso': 'desp_pessoal', 'viagem': 'desp_pessoal',
+  'marketing': 'desp_marketing', 'publicidade': 'desp_marketing', 'propaganda': 'desp_marketing',
+  'sistema': 'desp_operacional', 'software': 'desp_operacional', 'licença': 'desp_operacional',
+  'internet': 'desp_operacional', 'telefone': 'desp_operacional', 'telecom': 'desp_operacional',
+  'seguro': 'desp_operacional', 'contabil': 'desp_operacional', 'contábil': 'desp_operacional',
+  'ir ': 'ir_csll', 'csll': 'ir_csll', 'irpj': 'ir_csll',
 };
 
 @Component({
@@ -85,7 +70,7 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
   providers: [MessageService],
   template: `
     <div class="page-header">
-      <h2>Importação de Extratos</h2>
+      <h2>Importar Extratos Financeiros</h2>
     </div>
 
     <p-steps [model]="steps" [activeIndex]="activeStep()" [readonly]="true" styleClass="mb-steps" />
@@ -95,7 +80,7 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
       <p-card header="1. Selecione o arquivo e a empresa">
         <div class="upload-area">
           <div class="field">
-            <label>Empresa</label>
+            <label>Empresa destino</label>
             <p-dropdown
               [(ngModel)]="empresaSelecionadaId"
               [options]="empresaOptions()"
@@ -108,21 +93,16 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
 
           <div class="field">
             <label>Arquivo Excel (.xlsx, .xls) ou CSV</label>
-            <div class="file-drop" (click)="fileInput.click()" (dragover)="$event.preventDefault()" (drop)="onDrop($event)">
+            <div class="file-drop" (click)="fileInput.click()">
               <i class="pi pi-cloud-upload" style="font-size: 2.5rem; color: var(--primary-color)"></i>
-              <p>Clique ou arraste o arquivo aqui</p>
-              <small>Formatos aceitos: .xlsx, .xls, .csv</small>
+              <p>Clique para selecionar o arquivo</p>
+              <small>Formato: Visão Contas a Pagar (.xls, .xlsx, .csv)</small>
               @if (fileName()) {
-                <p-tag [value]="fileName()!" severity="success" styleClass="mt-tag" />
+                <p-tag [value]="fileName()!" severity="success" styleClass="mt-1" />
               }
             </div>
             <input #fileInput type="file" accept=".xlsx,.xls,.csv" (change)="onFileSelect($event)" style="display: none" />
           </div>
-
-          <p style="color: var(--text-color-secondary); font-size: 0.9rem; margin-top: 0.5rem">
-            A planilha deve conter colunas como: <strong>Data, Descrição, Valor, Tipo/Categoria</strong>.<br>
-            O sistema tentará identificar automaticamente as colunas e classificar na DRE.
-          </p>
         </div>
 
         <div style="text-align: right; margin-top: 1rem">
@@ -131,48 +111,66 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
       </p-card>
     }
 
-    <!-- Step 2: Mapeamento -->
+    <!-- Step 2: Preview e classificação -->
     @if (activeStep() === 1) {
-      <p-card header="2. Revise a classificação dos lançamentos">
-        <div class="mapping-header">
-          <span><strong>{{ linhasExtrato().length }}</strong> lançamentos encontrados</span>
-          <div class="mapping-stats">
-            <p-tag value="Receitas: {{ totalReceitas() | currency:'BRL' }}" severity="success" />
-            <p-tag value="Despesas: {{ totalDespesas() | currency:'BRL' }}" severity="danger" />
+      <p-card header="2. Revise os lançamentos">
+        <div class="summary-bar">
+          <div class="stat">
+            <span>Total de lançamentos</span>
+            <strong>{{ linhas().length }}</strong>
+          </div>
+          <div class="stat aberto">
+            <span>Em Aberto</span>
+            <strong>{{ qtdAberto() }} | {{ totalAberto() | currency:'BRL' }}</strong>
+          </div>
+          <div class="stat pago">
+            <span>Pagos</span>
+            <strong>{{ qtdPago() }} | {{ totalPago() | currency:'BRL' }}</strong>
+          </div>
+          <div class="stat total">
+            <span>Valor Total</span>
+            <strong>{{ totalGeral() | currency:'BRL' }}</strong>
           </div>
         </div>
 
         <p-table
-          [value]="linhasExtrato()"
+          [value]="linhas()"
           [paginator]="true"
-          [rows]="15"
+          [rows]="20"
           [rowHover]="true"
           styleClass="p-datatable-sm p-datatable-striped"
+          [scrollable]="true"
         >
           <ng-template pTemplate="header">
             <tr>
-              <th>Data</th>
+              <th style="width: 100px">Vencimento</th>
               <th>Descrição</th>
-              <th>Tipo</th>
-              <th style="text-align: right">Valor</th>
-              <th>Categoria DRE</th>
+              <th>Categoria</th>
+              <th style="width: 100px">Situação</th>
+              <th style="text-align: right; width: 120px">Valor</th>
+              <th style="text-align: right; width: 120px">Em Aberto</th>
+              <th style="width: 180px">Grupo DRE</th>
             </tr>
           </ng-template>
-          <ng-template pTemplate="body" let-linha let-i="rowIndex">
+          <ng-template pTemplate="body" let-linha>
             <tr>
-              <td>{{ linha.data }}</td>
-              <td>{{ linha.descricao }}</td>
+              <td>{{ linha.dataVencimento }}</td>
               <td>
-                <p-dropdown
-                  [(ngModel)]="linha.tipo"
-                  [options]="tipoOptions"
-                  optionLabel="label"
-                  optionValue="value"
-                  styleClass="w-8rem"
+                {{ linha.descricao }}
+                @if (linha.contaBancaria) {
+                  <br><small class="text-muted">{{ linha.contaBancaria }}</small>
+                }
+              </td>
+              <td><small>{{ linha.categoria }}</small></td>
+              <td>
+                <p-tag
+                  [value]="linha.situacao"
+                  [severity]="linha.situacao === 'Em aberto' ? 'warn' : 'success'"
                 />
               </td>
-              <td style="text-align: right" [class]="linha.tipo === 'receita' ? 'valor-pos' : 'valor-neg'">
-                {{ linha.valor | currency:'BRL' }}
+              <td style="text-align: right" class="valor-neg">{{ linha.valor | currency:'BRL' }}</td>
+              <td style="text-align: right" [class]="linha.valorAberto > 0 ? 'valor-neg' : ''">
+                {{ linha.valorAberto | currency:'BRL' }}
               </td>
               <td>
                 <p-dropdown
@@ -180,9 +178,7 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
                   [options]="grupoDreOptions"
                   optionLabel="label"
                   optionValue="value"
-                  placeholder="Classificar"
-                  styleClass="w-14rem"
-                  (onChange)="onGrupoDreChange(linha)"
+                  styleClass="w-full"
                 />
               </td>
             </tr>
@@ -196,12 +192,19 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
       </p-card>
     }
 
-    <!-- Step 3: DRE -->
+    <!-- Step 3: DRE resultado -->
     @if (activeStep() === 2) {
       <p-card>
         <div class="result-header">
           <h3>DRE - {{ empresaSelecionadaNome() }}</h3>
-          <p-button icon="pi pi-whatsapp" label="Enviar DRE via WhatsApp" severity="success" (onClick)="compartilharDreWhatsApp()" />
+          <div class="result-actions">
+            <p-button icon="pi pi-whatsapp" label="Enviar via WhatsApp" severity="success" (onClick)="compartilharDreWhatsApp()" />
+            <p-button label="Nova Importação" icon="pi pi-refresh" severity="secondary" (onClick)="reset()" />
+          </div>
+        </div>
+
+        <div class="import-result">
+          <p-tag value="{{ lancamentosImportados() }} lançamentos importados com sucesso" severity="success" />
         </div>
 
         @if (dreResult()) {
@@ -219,9 +222,7 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
                   @for (linha of dreResult()!.linhas; track linha.label) {
                     <tr [class]="linha.tipo === 'resultado' ? 'result-row' : ''">
                       <td [class]="linha.tipo === 'resultado' ? 'bold' : ''">{{ linha.label }}</td>
-                      <td class="text-right" [class]="getValorClass(linha)">
-                        {{ linha.valor | currency:'BRL' }}
-                      </td>
+                      <td class="text-right" [class]="getValorClass(linha)">{{ linha.valor | currency:'BRL' }}</td>
                       <td class="text-right">{{ linha.percentual | number:'1.1-1' }}%</td>
                     </tr>
                     @if (linha.children) {
@@ -237,7 +238,6 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
                 </tbody>
               </table>
             </p-tabPanel>
-
             <p-tabPanel header="Gráfico">
               @if (dreChartData()) {
                 <p-chart type="bar" [data]="dreChartData()!" [options]="chartOptions" height="400px" />
@@ -245,10 +245,6 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
             </p-tabPanel>
           </p-tabView>
         }
-
-        <div style="display: flex; justify-content: space-between; margin-top: 1rem">
-          <p-button label="Nova Importação" icon="pi pi-refresh" severity="secondary" (onClick)="reset()" />
-        </div>
       </p-card>
     }
 
@@ -260,31 +256,35 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
     :host ::ng-deep .mb-steps { margin-bottom: 2rem; }
 
     .upload-area { max-width: 600px; }
-    .field { margin-bottom: 1rem; }
+    .field { margin-bottom: 1.5rem; }
     .field label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
 
     .file-drop {
       border: 2px dashed var(--surface-border); border-radius: 10px;
       padding: 2rem; text-align: center; cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
+      transition: border-color 0.2s;
     }
-    .file-drop:hover { border-color: var(--primary-color); background: var(--surface-hover); }
+    .file-drop:hover { border-color: var(--primary-color); }
     .file-drop p { margin: 0.5rem 0; }
     .file-drop small { color: var(--text-color-secondary); }
-    :host ::ng-deep .mt-tag { margin-top: 0.5rem; }
 
-    .mapping-header {
-      display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;
+    .summary-bar {
+      display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;
     }
-    .mapping-stats { display: flex; gap: 0.5rem; }
+    .stat { display: flex; flex-direction: column; padding: 0.75rem 1.25rem; border-radius: 8px; background: var(--surface-ground); }
+    .stat span { font-size: 0.8rem; color: var(--text-color-secondary); }
+    .stat strong { font-size: 1.1rem; }
+    .stat.aberto strong { color: #f59e0b; }
+    .stat.pago strong { color: #22c55e; }
+    .stat.total strong { color: #3b82f6; }
 
-    .valor-pos { color: #22c55e; font-weight: 600; }
+    .text-muted { color: var(--text-color-secondary); }
     .valor-neg { color: #ef4444; font-weight: 600; }
 
-    .result-header {
-      display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;
-    }
+    .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
     .result-header h3 { margin: 0; }
+    .result-actions { display: flex; gap: 0.5rem; }
+    .import-result { margin-bottom: 1.5rem; }
 
     .dre-table { width: 100%; border-collapse: collapse; }
     .dre-table th, .dre-table td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--surface-border); }
@@ -299,20 +299,16 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
 export class ImportacaoComponent implements OnInit {
   activeStep = signal(0);
   fileName = signal<string | null>(null);
-  linhasExtrato = signal<LinhaExtrato[]>([]);
+  linhas = signal<LinhaExtrato[]>([]);
   importing = signal(false);
   dreResult = signal<DreData | null>(null);
+  lancamentosImportados = signal(0);
   empresaSelecionadaId: string | null = null;
 
   steps: MenuItem[] = [
     { label: 'Upload' },
-    { label: 'Classificação' },
+    { label: 'Revisão' },
     { label: 'DRE' },
-  ];
-
-  tipoOptions = [
-    { label: 'Receita', value: 'receita' },
-    { label: 'Despesa', value: 'despesa' },
   ];
 
   grupoDreOptions = [
@@ -331,18 +327,19 @@ export class ImportacaoComponent implements OnInit {
   ];
 
   empresaOptions = signal<{ label: string; value: string }[]>([]);
+
   chartOptions = {
     responsive: true,
     plugins: { legend: { display: false } },
-    scales: { y: { ticks: { callback: (v: number) => `R$ ${(v / 1000).toFixed(0)}k` } } },
   };
 
-  totalReceitas = computed(() =>
-    this.linhasExtrato().filter((l) => l.tipo === 'receita').reduce((s, l) => s + l.valor, 0),
-  );
-  totalDespesas = computed(() =>
-    this.linhasExtrato().filter((l) => l.tipo === 'despesa').reduce((s, l) => s + l.valor, 0),
-  );
+  canAdvanceStep1 = computed(() => !!this.empresaSelecionadaId && this.linhas().length > 0);
+
+  qtdAberto = computed(() => this.linhas().filter((l) => l.situacao === 'Em aberto').length);
+  qtdPago = computed(() => this.linhas().filter((l) => l.situacao !== 'Em aberto').length);
+  totalAberto = computed(() => this.linhas().filter((l) => l.situacao === 'Em aberto').reduce((s, l) => s + l.valorAberto, 0));
+  totalPago = computed(() => this.linhas().filter((l) => l.situacao !== 'Em aberto').reduce((s, l) => s + l.valorPago, 0));
+  totalGeral = computed(() => this.linhas().reduce((s, l) => s + l.valor, 0));
 
   empresaSelecionadaNome = computed(() => {
     const emp = this.empresaService.empresas().find((e) => e.id === this.empresaSelecionadaId);
@@ -362,14 +359,11 @@ export class ImportacaoComponent implements OnInit {
     };
   });
 
-  canAdvanceStep1 = computed(() => !!this.empresaSelecionadaId && this.linhasExtrato().length > 0);
-
   constructor(
     public empresaService: EmpresaService,
     private planoContasService: PlanoContasService,
     private lancamentoService: LancamentoService,
     private dreService: DreService,
-    private authService: AuthService,
     private messageService: MessageService,
   ) {}
 
@@ -387,137 +381,79 @@ export class ImportacaoComponent implements OnInit {
   onFileSelect(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
-    if (file) this.processFile(file);
-  }
-
-  onDrop(event: DragEvent) {
-    event.preventDefault();
-    const file = event.dataTransfer?.files[0];
-    if (file) this.processFile(file);
-  }
-
-  private processFile(file: File) {
+    if (!file) return;
     this.fileName.set(file.name);
-    const reader = new FileReader();
 
+    const reader = new FileReader();
     reader.onload = (e) => {
       const data = new Uint8Array(e.target?.result as ArrayBuffer);
       const workbook = XLSX.read(data, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const json = XLSX.utils.sheet_to_json<any>(sheet, { raw: false });
-
-      this.parseRows(json);
+      this.parseVisaoContasPagar(json);
     };
-
     reader.readAsArrayBuffer(file);
   }
 
-  private parseRows(rows: any[]) {
-    if (rows.length === 0) return;
-
-    const keys = Object.keys(rows[0]);
-    const findCol = (hints: string[]) =>
-      keys.find((k) => hints.some((h) => k.toLowerCase().includes(h))) ?? null;
-
-    const colData = findCol(['data', 'date', 'vencimento', 'dt']);
-    const colDesc = findCol(['descricao', 'descrição', 'desc', 'historico', 'histórico', 'memo', 'nome']);
-    const colValor = findCol(['valor', 'value', 'montante', 'total', 'amount']);
-    const colTipo = findCol(['tipo', 'type', 'natureza']);
-    const colCategoria = findCol(['categoria', 'category', 'grupo', 'classificacao', 'classificação', 'conta']);
-
+  private parseVisaoContasPagar(rows: any[]) {
     const linhas: LinhaExtrato[] = [];
 
     for (const row of rows) {
-      const rawValor = row[colValor ?? ''] ?? row[keys.find((k) => {
-        const v = row[k];
-        return typeof v === 'string' && /[\d,.]+/.test(v) && !isNaN(parseFloat(v.replace(/\./g, '').replace(',', '.')));
-      }) ?? ''];
+      const dataVenc = row['Data de vencimento'] ?? row['Data vencimento'] ?? '';
+      const dataComp = row['Data de competência'] ?? row['Data competência'] ?? '';
+      const descricao = row['Descrição'] ?? row['Descricao'] ?? '';
+      const valor = this.parseValor(row['Valor original da parcela (R$)'] ?? row['Valor'] ?? '0');
+      const valorPago = this.parseValor(row['Valor total pago da parcela (R$)'] ?? row['Valor pago'] ?? '0');
+      const valorAberto = this.parseValor(row['Valor total da parcela em aberto (R$)'] ?? row['Valor em aberto'] ?? '0');
+      const situacao = row['Situação'] ?? row['Situacao'] ?? 'Em aberto';
+      const categoria = row['Categoria 1'] ?? row['Categoria'] ?? '';
+      const contaBancaria = row['Conta bancária'] ?? row['Conta bancaria'] ?? '';
+      const formaPagamento = row['Forma de pagamento'] ?? '';
+      const notaFiscal = row['Nota fiscal'] ?? '';
+      const observacoes = row['Observações'] ?? row['Observacoes'] ?? '';
+      const recorrencia = row['Recorrência'] ?? '';
 
-      if (!rawValor) continue;
+      if (!descricao && valor === 0) continue;
 
-      const valorNum = typeof rawValor === 'number'
-        ? rawValor
-        : parseFloat(String(rawValor).replace(/\./g, '').replace(',', '.'));
-
-      if (isNaN(valorNum) || valorNum === 0) continue;
-
-      const rawData = row[colData ?? ''] ?? '';
-      let dataFormatted = this.parseDate(rawData);
-
-      const descricao = row[colDesc ?? ''] ?? row[keys[1]] ?? 'Sem descrição';
-      const rawTipo = row[colTipo ?? ''] ?? '';
-      const rawCategoria = row[colCategoria ?? ''] ?? '';
-
-      let tipo: 'receita' | 'despesa' = valorNum >= 0 ? 'receita' : 'despesa';
-      if (rawTipo) {
-        const tipoLower = String(rawTipo).toLowerCase();
-        if (tipoLower.includes('receita') || tipoLower.includes('credito') || tipoLower.includes('crédito') || tipoLower === 'c') {
-          tipo = 'receita';
-        } else if (tipoLower.includes('despesa') || tipoLower.includes('debito') || tipoLower.includes('débito') || tipoLower === 'd') {
-          tipo = 'despesa';
-        }
-      }
-
-      const grupoDre = this.detectGrupoDre(descricao, rawCategoria, tipo);
+      const grupoDre = this.detectGrupoDre(descricao, categoria);
 
       linhas.push({
-        data: dataFormatted,
-        descricao: String(descricao).trim(),
-        valor: Math.abs(valorNum),
-        tipo,
-        categoria: String(rawCategoria).trim(),
+        dataVencimento: dataVenc,
+        dataCompetencia: dataComp,
+        descricao,
+        valor,
+        valorPago,
+        valorAberto,
+        situacao,
+        categoria,
+        contaBancaria,
+        formaPagamento,
+        notaFiscal,
+        observacoes,
+        recorrencia,
         grupoDre,
-        planoContaId: null,
+        selecionado: true,
       });
     }
 
-    this.linhasExtrato.set(linhas);
+    this.linhas.set(linhas);
   }
 
-  private parseDate(raw: any): string {
-    if (!raw) {
-      const now = new Date();
-      return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
-    }
-
-    const str = String(raw).trim();
-
-    // DD/MM/YYYY
-    const brMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-    if (brMatch) return `${brMatch[1].padStart(2, '0')}/${brMatch[2].padStart(2, '0')}/${brMatch[3]}`;
-
-    // YYYY-MM-DD
-    const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
-
-    // Excel serial number
-    const num = Number(str);
-    if (!isNaN(num) && num > 30000 && num < 60000) {
-      const d = new Date((num - 25569) * 86400 * 1000);
-      return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-    }
-
-    return str;
+  private parseValor(raw: any): number {
+    if (typeof raw === 'number') return Math.abs(raw);
+    const str = String(raw).replace(/\s/g, '');
+    const num = parseFloat(str.replace(/\./g, '').replace(',', '.'));
+    return isNaN(num) ? 0 : Math.abs(num);
   }
 
-  private detectGrupoDre(descricao: string, categoria: string, tipo: 'receita' | 'despesa'): GrupoDre {
-    const textos = `${descricao} ${categoria}`.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  private detectGrupoDre(descricao: string, categoria: string): GrupoDre {
+    const texto = `${descricao} ${categoria}`.toLowerCase();
 
     for (const [keyword, grupo] of Object.entries(CATEGORIA_DRE_MAP)) {
-      const normalized = keyword.normalize('NFD').replace(/[̀-ͯ]/g, '');
-      if (textos.includes(normalized)) return grupo;
+      if (texto.includes(keyword)) return grupo;
     }
 
-    if (tipo === 'receita') return 'receita_bruta';
     return 'desp_operacional';
-  }
-
-  onGrupoDreChange(linha: LinhaExtrato) {
-    if (linha.grupoDre === 'receita_bruta' || linha.grupoDre === 'outras_receitas_despesas') {
-      linha.tipo = 'receita';
-    } else {
-      linha.tipo = 'despesa';
-    }
   }
 
   nextStep() {
@@ -529,66 +465,52 @@ export class ImportacaoComponent implements OnInit {
   }
 
   async executarImportacao() {
-    const linhas = this.linhasExtrato();
     const empresaId = this.empresaSelecionadaId;
-    if (!empresaId || linhas.length === 0) return;
+    if (!empresaId) return;
 
     this.importing.set(true);
 
-    // Carregar plano de contas da empresa selecionada
-    const oldEmpresa = this.empresaService.empresaAtiva();
     const emp = this.empresaService.empresas().find((e) => e.id === empresaId)!;
     this.empresaService.setEmpresaAtiva(emp);
     await this.planoContasService.loadContas();
-
     const contas = this.planoContasService.contas();
 
-    // Mapear linhas para lançamentos
-    const lancamentos = linhas.map((l) => {
-      const planoContaId = this.findPlanoContaId(contas, l.grupoDre) ?? contas[0]?.id;
+    const lancamentos = this.linhas().map((l) => {
+      const planoContaId = contas.find((c) => c.grupo_dre === l.grupoDre)?.id ?? contas[0]?.id;
+      const parts = l.dataVencimento.split('/');
+      const dataIso = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : l.dataVencimento;
 
-      const parts = l.data.split('/');
-      const dataIso = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : l.data;
+      const isPago = l.situacao !== 'Em aberto';
 
       return {
         descricao: l.descricao,
-        tipo: l.tipo as any,
+        tipo: 'despesa',
         valor: l.valor,
         data_vencimento: dataIso,
-        status: 'pago' as any,
-        data_pagamento: dataIso,
+        status: isPago ? 'pago' : 'pendente',
+        data_pagamento: isPago ? dataIso : null,
         plano_conta_id: planoContaId,
         empresa_id: empresaId,
         fornecedor_cliente: l.categoria || null,
+        documento: l.notaFiscal || null,
+        observacao: l.observacoes || null,
       };
     });
 
-    // Inserir lançamentos
     const { data } = await this.lancamentoService.supabaseInsert(lancamentos);
     const count = data?.length ?? 0;
+    this.lancamentosImportados.set(count);
 
     // Gerar DRE
-    const datas = linhas.map((l) => {
-      const parts = l.data.split('/');
-      return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : l.data;
-    }).sort();
-
-    const dataInicio = datas[0] ?? new Date().toISOString().split('T')[0];
-    const dataFim = datas[datas.length - 1] ?? dataInicio;
-
+    const datas = lancamentos.map((l) => l.data_vencimento).sort();
+    const dataInicio = datas[0];
+    const dataFim = datas[datas.length - 1];
     const dre = await this.dreService.loadDre(empresaId, dataInicio, dataFim, this.empresaSelecionadaNome());
     this.dreResult.set(dre);
 
-    if (oldEmpresa) this.empresaService.setEmpresaAtiva(oldEmpresa);
-
-    this.messageService.add({ severity: 'success', summary: `${count} lançamentos importados. DRE gerada.` });
+    this.messageService.add({ severity: 'success', summary: `${count} lançamentos importados com sucesso` });
     this.importing.set(false);
     this.activeStep.set(2);
-  }
-
-  private findPlanoContaId(contas: PlanoConta[], grupoDre: GrupoDre | null): string | null {
-    if (!grupoDre) return null;
-    return contas.find((c) => c.grupo_dre === grupoDre)?.id ?? null;
   }
 
   compartilharDreWhatsApp() {
@@ -619,8 +541,9 @@ export class ImportacaoComponent implements OnInit {
 
   reset() {
     this.activeStep.set(0);
-    this.linhasExtrato.set([]);
+    this.linhas.set([]);
     this.fileName.set(null);
     this.dreResult.set(null);
+    this.lancamentosImportados.set(0);
   }
 }
