@@ -1,0 +1,54 @@
+import { Routes } from '@angular/router';
+import { authGuard } from './core/guards/auth.guard';
+import { empresaGuard } from './core/guards/empresa.guard';
+import { roleGuard } from './core/guards/role.guard';
+import { MainLayoutComponent } from './layout/main-layout.component';
+import { LoginComponent } from './features/auth/login.component';
+import { EmpresaSelectComponent } from './features/empresa-select/empresa-select.component';
+
+export const routes: Routes = [
+  { path: 'login', component: LoginComponent },
+  {
+    path: 'selecionar-empresa',
+    component: EmpresaSelectComponent,
+    canActivate: [authGuard],
+  },
+  {
+    path: '',
+    component: MainLayoutComponent,
+    canActivate: [authGuard, empresaGuard],
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./features/dashboard/dashboard.component').then(
+            (m) => m.DashboardComponent,
+          ),
+      },
+      {
+        path: 'empresas',
+        loadComponent: () =>
+          import('./features/empresas/empresas.component').then(
+            (m) => m.EmpresasComponent,
+          ),
+        canActivate: [roleGuard('admin_geral')],
+      },
+      {
+        path: 'usuarios',
+        loadComponent: () =>
+          import('./features/usuarios/usuarios.component').then(
+            (m) => m.UsuariosComponent,
+          ),
+        canActivate: [roleGuard('admin_geral')],
+      },
+      {
+        path: 'plano-contas',
+        loadComponent: () =>
+          import('./features/plano-contas/plano-contas.component').then(
+            (m) => m.PlanoContasComponent,
+          ),
+      },
+    ],
+  },
+  { path: '**', redirectTo: '' },
+];
