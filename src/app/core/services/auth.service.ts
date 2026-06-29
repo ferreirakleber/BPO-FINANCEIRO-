@@ -21,11 +21,11 @@ export class AuthService {
     this.initAuthListener();
   }
 
-  private async initAuthListener() {
+  private initAuthListener() {
     this.supabaseService.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
+      if (session?.user && event !== 'SIGNED_IN') {
         await this.loadUsuario(session.user.id);
-      } else {
+      } else if (!session) {
         this._usuario.set(null);
       }
       this._loading.set(false);
@@ -33,7 +33,7 @@ export class AuthService {
   }
 
   private async loadUsuario(userId: string) {
-    const { data } = await this.supabaseService.supabase
+    const { data, error } = await this.supabaseService.supabase
       .from('usuarios')
       .select('*')
       .eq('id', userId)
@@ -45,11 +45,18 @@ export class AuthService {
   }
 
   async login(email: string, password: string): Promise<string | null> {
-    const { error } = await this.supabaseService.auth.signInWithPassword({
+    const { data, error } = await this.supabaseService.auth.signInWithPassword({
       email,
       password,
     });
-    return error?.message ?? null;
+
+    if (error) return error.message;
+
+    if (data.user) {
+      await this.loadUsuario(data.user.id);
+    }
+
+    return null;
   }
 
   async logout() {

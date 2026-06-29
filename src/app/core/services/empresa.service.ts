@@ -22,34 +22,12 @@ export class EmpresaService {
   async loadEmpresas() {
     this._loading.set(true);
 
-    let query = this.supabaseService.supabase
+    const { data, error } = await this.supabaseService.supabase
       .from('empresas')
       .select('*')
       .eq('ativa', true)
       .order('razao_social');
 
-    if (!this.authService.isAdmin()) {
-      const userId = this.authService.usuario()?.id;
-      if (!userId) {
-        this._loading.set(false);
-        return;
-      }
-
-      const { data: vinculos } = await this.supabaseService.supabase
-        .from('usuario_empresas')
-        .select('empresa_id')
-        .eq('usuario_id', userId);
-
-      const ids = vinculos?.map((v) => v.empresa_id) ?? [];
-      if (ids.length === 0) {
-        this._empresas.set([]);
-        this._loading.set(false);
-        return;
-      }
-      query = query.in('id', ids);
-    }
-
-    const { data } = await query;
     this._empresas.set((data as Empresa[]) ?? []);
     this._loading.set(false);
 
