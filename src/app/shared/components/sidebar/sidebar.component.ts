@@ -32,6 +32,11 @@ import { AuthService } from '../../../core/services/auth.service';
           </a>
         }
 
+        <a routerLink="/dre" routerLinkActive="active" class="nav-item">
+          <i class="pi pi-chart-bar"></i>
+          <span>DRE</span>
+        </a>
+
         <a routerLink="/lancamentos" routerLinkActive="active" class="nav-item">
           <i class="pi pi-dollar"></i>
           <span>Lançamentos</span>
@@ -50,6 +55,16 @@ import { AuthService } from '../../../core/services/auth.service';
     </div>
   `,
   styles: `
+    :host {
+      display: block;
+      width: 250px;
+      height: 100vh;
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 100;
+    }
+
     .sidebar {
       width: 250px;
       height: 100vh;
@@ -57,9 +72,6 @@ import { AuthService } from '../../../core/services/auth.service';
       border-right: 1px solid var(--surface-border);
       display: flex;
       flex-direction: column;
-      position: fixed;
-      left: 0;
-      top: 0;
     }
 
     .logo {

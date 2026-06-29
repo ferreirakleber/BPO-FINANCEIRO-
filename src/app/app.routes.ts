@@ -56,6 +56,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'dre',
+        loadComponent: () =>
+          import('./features/dre/dre.component').then(
+            (m) => m.DreComponent,
+          ),
+      },
+      {
         path: 'lancamentos',
         loadComponent: () =>
           import('./features/lancamentos/lancamentos.component').then(
