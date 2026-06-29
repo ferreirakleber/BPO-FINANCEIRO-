@@ -95,11 +95,21 @@ export class LancamentoService {
   async delete(id: string): Promise<boolean> {
     const { error } = await this.supabaseService.supabase
       .from('lancamentos')
-      .update({ status: 'cancelado' as StatusLancamento, updated_at: new Date().toISOString() })
+      .delete()
       .eq('id', id);
 
     if (!error) await this.loadLancamentos();
     return !error;
+  }
+
+  async deleteMany(ids: string[]): Promise<number> {
+    const { error } = await this.supabaseService.supabase
+      .from('lancamentos')
+      .delete()
+      .in('id', ids);
+
+    if (!error) await this.loadLancamentos();
+    return error ? 0 : ids.length;
   }
 
   async supabaseInsert(lancamentos: any[]): Promise<{ data: any[] | null }> {

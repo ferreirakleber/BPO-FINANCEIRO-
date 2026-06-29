@@ -477,12 +477,9 @@ export class LancamentosComponent implements OnInit {
       acceptButtonStyleClass: 'p-button-danger',
       accept: async () => {
         const ids = this.selectedLancamentos.map((l) => l.id);
-        for (const id of ids) {
-          await this.lancamentoService.delete(id);
-        }
+        const count = await this.lancamentoService.deleteMany(ids);
         this.selectedLancamentos = [];
-        await this.lancamentoService.loadLancamentos();
-        this.messageService.add({ severity: 'success', summary: `${ids.length} lançamentos excluídos` });
+        this.messageService.add({ severity: 'success', summary: `${count} lançamentos excluídos` });
       },
     });
   }
