@@ -30,7 +30,10 @@ export class EmpresaService {
 
     if (!this.authService.isAdmin()) {
       const userId = this.authService.usuario()?.id;
-      if (!userId) return;
+      if (!userId) {
+        this._loading.set(false);
+        return;
+      }
 
       const { data: vinculos } = await this.supabaseService.supabase
         .from('usuario_empresas')
