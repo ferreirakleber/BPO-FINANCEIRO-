@@ -556,7 +556,11 @@ export class CalendarioComponent implements OnInit {
 
       const valor = typeof rawValor === 'number'
         ? Math.abs(rawValor)
-        : Math.abs(parseFloat(String(rawValor).replace(/\./g, '').replace(',', '.')));
+        : Math.abs(parseFloat(
+            String(rawValor).includes(',')
+              ? String(rawValor).replace(/\./g, '').replace(',', '.')
+              : String(rawValor)
+          ));
 
       if (isNaN(valor) || valor === 0) continue;
 

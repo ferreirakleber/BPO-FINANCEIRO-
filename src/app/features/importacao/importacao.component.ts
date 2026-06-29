@@ -573,7 +573,15 @@ export class ImportacaoComponent implements OnInit {
   private parseValor(raw: any): number {
     if (typeof raw === 'number') return Math.abs(raw);
     const str = String(raw).replace(/\s/g, '');
-    const num = parseFloat(str.replace(/\./g, '').replace(',', '.'));
+
+    // Se tem vírgula, é formato BR (1.234,56) → remover pontos, trocar vírgula
+    if (str.includes(',')) {
+      const num = parseFloat(str.replace(/\./g, '').replace(',', '.'));
+      return isNaN(num) ? 0 : Math.abs(num);
+    }
+
+    // Sem vírgula = formato US/Excel (1234.56 ou 55000) → usar direto
+    const num = parseFloat(str);
     return isNaN(num) ? 0 : Math.abs(num);
   }
 
