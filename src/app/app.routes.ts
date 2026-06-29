@@ -48,6 +48,20 @@ export const routes: Routes = [
             (m) => m.PlanoContasComponent,
           ),
       },
+      {
+        path: 'contas-bancarias',
+        loadComponent: () =>
+          import('./features/contas-bancarias/contas-bancarias.component').then(
+            (m) => m.ContasBancariasComponent,
+          ),
+      },
+      {
+        path: 'lancamentos',
+        loadComponent: () =>
+          import('./features/lancamentos/lancamentos.component').then(
+            (m) => m.LancamentosComponent,
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },
