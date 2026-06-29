@@ -254,17 +254,40 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
                     </tr>
                     @if (linha.children) {
                       @for (child of linha.children; track child.label) {
-                        <tr class="child-row clickable-row" (click)="child.detalhes?.length ? openDetalhes(child) : null">
-                          <td style="padding-left: 2rem">{{ child.label }}</td>
-                          <td class="text-right">{{ child.valor | currency:'BRL' }}</td>
-                          <td class="text-right">{{ child.percentual | number:'1.1-1' }}%</td>
-                          <td class="text-right">{{ child.detalhes?.length ?? '' }}</td>
-                          <td>
-                            @if (child.detalhes?.length) {
-                              <i class="pi pi-search" style="cursor: pointer; color: var(--primary-color)"></i>
+                        @if (child.valor > 0) {
+                          <tr class="child-row clickable-row" (click)="toggleExpand(child.label)">
+                            <td style="padding-left: 2rem">
+                              @if (child.detalhes?.length) {
+                                <i [class]="expandedRows[child.label] ? 'pi pi-chevron-down' : 'pi pi-chevron-right'" style="margin-right: 0.5rem; font-size: 0.8rem"></i>
+                              }
+                              {{ child.label }}
+                            </td>
+                            <td class="text-right">{{ child.valor | currency:'BRL' }}</td>
+                            <td class="text-right">{{ child.percentual | number:'1.1-1' }}%</td>
+                            <td class="text-right">{{ child.detalhes?.length ?? '' }}</td>
+                            <td>
+                              @if (child.detalhes?.length) {
+                                <i class="pi pi-search" style="cursor: pointer; color: var(--primary-color)" (click)="openDetalhes(child); $event.stopPropagation()"></i>
+                              }
+                            </td>
+                          </tr>
+                          @if (expandedRows[child.label] && child.detalhes?.length) {
+                            @for (det of child.detalhes; track det.id) {
+                              <tr class="detail-row">
+                                <td style="padding-left: 3.5rem">
+                                  <span class="det-desc">{{ det.descricao }}</span>
+                                  @if (det.fornecedor_cliente) {
+                                    <span class="det-fornecedor">{{ det.fornecedor_cliente }}</span>
+                                  }
+                                </td>
+                                <td class="text-right det-valor">{{ det.valor | currency:'BRL' }}</td>
+                                <td class="text-right det-data">{{ det.data_vencimento | date:'dd/MM' }}</td>
+                                <td></td>
+                                <td></td>
+                              </tr>
                             }
-                          </td>
-                        </tr>
+                          }
+                        }
                       }
                     }
                   }
@@ -372,6 +395,14 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
     .child-row td { font-size: 0.9rem; color: var(--text-color-secondary); }
     .clickable-row { cursor: pointer; }
     .clickable-row:hover { background: var(--surface-hover); }
+    .detail-row { background: var(--surface-0); }
+    .detail-row td { padding: 0.4rem 1rem; font-size: 0.85rem; border-bottom: 1px dashed var(--surface-200); }
+    .det-desc { color: var(--text-color); }
+    .det-fornecedor { color: var(--text-color-secondary); margin-left: 0.5rem; font-size: 0.8rem; }
+    .det-fornecedor::before { content: '| '; }
+    .det-valor { color: #ef4444; }
+    .det-data { color: var(--text-color-secondary); }
+
     .ebitda-row { background: #eff6ff; }
     .ebitda-row td { font-weight: 700; color: #1e40af; }
     .destaque-row td { font-style: italic; font-size: 0.9rem; }
@@ -385,6 +416,7 @@ export class ImportacaoComponent implements OnInit {
   dreResult = signal<DreData | null>(null);
   lancamentosImportados = signal(0);
   empresaSelecionadaId: string | null = null;
+  expandedRows: Record<string, boolean> = {};
   detalhesVisible = false;
   detalhesLabel = '';
   detalhesLancamentos: any[] = [];
@@ -684,6 +716,10 @@ export class ImportacaoComponent implements OnInit {
     msg += `\n\n_Enviado via BPO Financeiro_`;
 
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+
+  toggleExpand(label: string) {
+    this.expandedRows[label] = !this.expandedRows[label];
   }
 
   openDetalhes(linha: any) {
