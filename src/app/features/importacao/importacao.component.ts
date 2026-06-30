@@ -17,7 +17,8 @@ import { EmpresaService } from '../../core/services/empresa.service';
 import { PlanoContasService } from '../../core/services/plano-contas.service';
 import { LancamentoService } from '../../core/services/lancamento.service';
 import { DreService } from '../../core/services/dre.service';
-import { PlanoConta, GrupoDre } from '../../core/models/plano-contas.model';
+import { SupabaseService } from '../../core/services/supabase.service';
+import { GrupoDre } from '../../core/models/plano-contas.model';
 import { DreData } from '../../core/models/dre.model';
 
 interface LinhaExtrato {
@@ -35,11 +36,25 @@ interface LinhaExtrato {
   observacoes: string;
   recorrencia: string;
   grupoDre: GrupoDre;
-  selecionado: boolean;
+  tipoDetectado: 'receita' | 'despesa';
+  arquivoOrigem: string;
+}
+
+interface ArquivoImportado {
+  nome: string;
+  tipoDetectado: 'receita' | 'despesa' | 'misto';
+  totalLinhas: number;
+  totalValor: number;
+  status: 'ok' | 'erro';
+  erro?: string;
 }
 
 const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
   'receita': 'receita_bruta', 'faturamento': 'receita_bruta', 'vendas': 'receita_bruta',
+  'mensalidade': 'receita_bruta', 'mensalidades': 'receita_bruta', 'adesao': 'receita_bruta',
+  'adesão': 'receita_bruta', 'personal': 'receita_bruta', 'diaria': 'receita_bruta',
+  'avaliação': 'receita_bruta', 'avaliacao': 'receita_bruta', 'boutique': 'receita_bruta',
+  'suplemento': 'receita_bruta', 'produto': 'receita_bruta', 'serviço': 'receita_bruta',
   'imposto': 'deducoes', 'impostos': 'deducoes',
   'custo': 'custos', 'cmv': 'custos', 'csp': 'custos',
   'administrativ': 'desp_admin', 'aluguel': 'desp_admin', 'locação': 'desp_admin',
@@ -48,7 +63,7 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
   'comercial': 'desp_comercial', 'comissao': 'desp_comercial', 'comissão': 'desp_comercial',
   'financeiro': 'desp_financeira', 'financeira': 'desp_financeira', 'juros': 'desp_financeira',
   'tarifa': 'desp_financeira', 'banco': 'desp_financeira', 'iof': 'desp_financeira',
-  'tribut': 'desp_tributaria', 'das': 'desp_tributaria', 'simples': 'desp_tributaria',
+  'tribut': 'desp_tributaria', 'das ': 'desp_tributaria', 'simples': 'desp_tributaria',
   'inss': 'desp_tributaria', 'fgts': 'desp_tributaria', 'irrf': 'desp_tributaria',
   'pessoal': 'desp_pessoal', 'salario': 'desp_pessoal', 'salário': 'desp_pessoal',
   'folha': 'desp_pessoal', 'prolabore': 'desp_pessoal', 'pró-labore': 'desp_pessoal',
@@ -78,9 +93,9 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
 
     <p-steps [model]="steps" [activeIndex]="activeStep()" [readonly]="true" styleClass="mb-steps" />
 
-    <!-- Step 1: Upload -->
+    <!-- Step 1: Upload múltiplos arquivos -->
     @if (activeStep() === 0) {
-      <p-card header="1. Selecione o arquivo e a empresa">
+      <p-card header="1. Selecione os arquivos e a empresa">
         <div class="upload-area">
           <div class="field">
             <label>Empresa destino</label>
@@ -95,40 +110,64 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
           </div>
 
           <div class="field">
-            <label>Arquivo Excel (.xlsx, .xls) ou CSV</label>
+            <label>Arquivos Excel (.xlsx, .xls) ou CSV — selecione quantos quiser</label>
             <div class="file-drop" (click)="fileInput.click()">
               <i class="pi pi-cloud-upload" style="font-size: 2.5rem; color: var(--primary-color)"></i>
-              <p>Clique para selecionar o arquivo</p>
-              <small>Formato: Visão Contas a Pagar (.xls, .xlsx, .csv)</small>
-              @if (fileName()) {
-                <p-tag [value]="fileName()!" severity="success" styleClass="mt-1" />
-              }
+              <p>Clique para selecionar os arquivos</p>
+              <small>Você pode selecionar múltiplos arquivos de uma vez (Ctrl+Click)</small>
+              <small style="display:block; margin-top:0.25rem; color: var(--primary-color)">
+                Formatos aceitos: Extrato Financeiro, Análise de Recebimentos, Visão Contas a Pagar
+              </small>
             </div>
-            <input #fileInput type="file" accept=".xlsx,.xls,.csv" (change)="onFileSelect($event)" style="display: none" />
+            <input #fileInput type="file" accept=".xlsx,.xls,.csv" multiple (change)="onFilesSelect($event)" style="display: none" />
           </div>
+
+          <!-- Lista de arquivos carregados -->
+          @if (arquivosCarregados().length > 0) {
+            <div class="arquivos-list">
+              <h4 style="margin: 0 0 0.75rem">Arquivos selecionados ({{ arquivosCarregados().length }})</h4>
+              @for (arq of arquivosCarregados(); track arq.nome) {
+                <div class="arquivo-item">
+                  <div class="arquivo-info">
+                    <i class="pi pi-file-excel" style="color: #22c55e; font-size: 1.2rem"></i>
+                    <div>
+                      <div class="arquivo-nome">{{ arq.nome }}</div>
+                      <div class="arquivo-meta">
+                        <p-tag
+                          [value]="arq.tipoDetectado === 'receita' ? 'Receitas' : arq.tipoDetectado === 'despesa' ? 'Despesas' : 'Misto'"
+                          [severity]="arq.tipoDetectado === 'receita' ? 'success' : arq.tipoDetectado === 'despesa' ? 'danger' : 'warn'"
+                        />
+                        <span class="arquivo-qtd">{{ arq.totalLinhas }} lançamentos</span>
+                        <span class="arquivo-valor">{{ arq.totalValor | currency:'BRL' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p-button icon="pi pi-times" severity="danger" [text]="true" size="small" (onClick)="removerArquivo(arq.nome)" />
+                </div>
+              }
+
+              <div class="resumo-total">
+                <span>Total: <strong>{{ totalLinhas() }} lançamentos</strong></span>
+                <span>Receitas: <strong class="val-pos">{{ totalReceitas() | currency:'BRL' }}</strong></span>
+                <span>Despesas: <strong class="val-neg">{{ totalDespesas() | currency:'BRL' }}</strong></span>
+              </div>
+            </div>
+          }
         </div>
 
         <div style="text-align: right; margin-top: 1rem">
-          <p-button label="Próximo" icon="pi pi-arrow-right" (onClick)="nextStep()" [disabled]="!canAdvanceStep1()" />
+          <p-button label="Próximo" icon="pi pi-arrow-right" (onClick)="nextStep()" [disabled]="linhas().length === 0" />
         </div>
       </p-card>
     }
 
-    <!-- Step 2: Preview e classificação -->
+    <!-- Step 2: Revisão combinada -->
     @if (activeStep() === 1) {
       <p-card header="2. Revise os lançamentos">
         <div class="summary-bar">
           <div class="stat">
             <span>Total de lançamentos</span>
             <strong>{{ linhas().length }}</strong>
-          </div>
-          <div class="stat aberto">
-            <span>Em Aberto</span>
-            <strong>{{ qtdAberto() }} | {{ totalAberto() | currency:'BRL' }}</strong>
-          </div>
-          <div class="stat pago">
-            <span>Pagos</span>
-            <strong>{{ qtdPago() }} | {{ totalPago() | currency:'BRL' }}</strong>
           </div>
           <div class="stat receita">
             <span>Receitas</span>
@@ -138,9 +177,13 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
             <span>Despesas</span>
             <strong>{{ totalDespesas() | currency:'BRL' }}</strong>
           </div>
-          <div class="stat total">
-            <span>Valor Total</span>
-            <strong>{{ totalGeral() | currency:'BRL' }}</strong>
+          <div class="stat aberto">
+            <span>Em Aberto</span>
+            <strong>{{ qtdAberto() }} | {{ totalAberto() | currency:'BRL' }}</strong>
+          </div>
+          <div class="stat pago">
+            <span>Pagos/Recebidos</span>
+            <strong>{{ qtdPago() }}</strong>
           </div>
         </div>
 
@@ -157,33 +200,32 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
               <th style="width: 100px">Vencimento</th>
               <th>Descrição</th>
               <th>Categoria</th>
+              <th style="width: 80px">Tipo</th>
               <th style="width: 100px">Situação</th>
               <th style="text-align: right; width: 120px">Valor</th>
-              <th style="text-align: right; width: 120px">Em Aberto</th>
               <th style="width: 180px">Grupo DRE</th>
+              <th style="width: 120px">Arquivo</th>
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-linha>
             <tr>
               <td>{{ linha.dataVencimento }}</td>
-              <td>
-                {{ linha.descricao }}
-                @if (linha.contaBancaria) {
-                  <br><small class="text-muted">{{ linha.contaBancaria }}</small>
-                }
-              </td>
+              <td>{{ linha.descricao }}</td>
               <td><small>{{ linha.categoria }}</small></td>
+              <td>
+                <p-tag
+                  [value]="linha.tipoDetectado === 'receita' ? 'Receita' : 'Despesa'"
+                  [severity]="linha.tipoDetectado === 'receita' ? 'success' : 'danger'"
+                />
+              </td>
               <td>
                 <p-tag
                   [value]="linha.situacao"
                   [severity]="linha.situacao === 'Em aberto' ? 'warn' : 'success'"
                 />
               </td>
-              <td style="text-align: right" [class]="linha.grupoDre === 'receita_bruta' ? 'valor-pos' : 'valor-neg'">
-            {{ linha.valor | currency:'BRL' }}
-          </td>
-              <td style="text-align: right" [class]="linha.valorAberto > 0 ? 'valor-neg' : ''">
-                {{ linha.valorAberto | currency:'BRL' }}
+              <td style="text-align: right" [class]="linha.tipoDetectado === 'receita' ? 'valor-pos' : 'valor-neg'">
+                {{ linha.valor | currency:'BRL' }}
               </td>
               <td>
                 <p-dropdown
@@ -194,6 +236,7 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
                   styleClass="w-full"
                 />
               </td>
+              <td><small class="text-muted">{{ linha.arquivoOrigem }}</small></td>
             </tr>
           </ng-template>
         </p-table>
@@ -209,7 +252,7 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
     @if (activeStep() === 2) {
       <p-card>
         <div class="result-header">
-          <h3>DRE - {{ empresaSelecionadaNome() }}</h3>
+          <h3>DRE — {{ empresaSelecionadaNome() }}</h3>
           <div class="result-actions">
             <p-button icon="pi pi-whatsapp" label="Enviar via WhatsApp" severity="success" (onClick)="compartilharDreWhatsApp()" />
             <p-button label="Nova Importação" icon="pi pi-refresh" severity="secondary" (onClick)="reset()" />
@@ -294,7 +337,6 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
                 </tbody>
               </table>
 
-              <!-- Dialog detalhes -->
               <p-dialog
                 [(visible)]="detalhesVisible"
                 [header]="detalhesLabel"
@@ -312,7 +354,6 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
                       <th>Data</th>
                       <th>Descrição</th>
                       <th>Categoria</th>
-                      <th>Fornecedor/Cliente</th>
                       <th class="text-right">Valor</th>
                     </tr>
                   </ng-template>
@@ -321,13 +362,12 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
                       <td>{{ d.data_vencimento | date:'dd/MM/yyyy' }}</td>
                       <td>{{ d.descricao }}</td>
                       <td>{{ d.categoria }}</td>
-                      <td>{{ d.fornecedor_cliente || '-' }}</td>
                       <td class="text-right" style="font-weight: 600">{{ d.valor | currency:'BRL' }}</td>
                     </tr>
                   </ng-template>
                   <ng-template pTemplate="footer">
                     <tr>
-                      <td colspan="4" class="bold">Total</td>
+                      <td colspan="3" class="bold">Total</td>
                       <td class="text-right bold">{{ detalhesTotal | currency:'BRL' }}</td>
                     </tr>
                   </ng-template>
@@ -351,7 +391,7 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
     .page-header h2 { margin: 0; }
     :host ::ng-deep .mb-steps { margin-bottom: 2rem; }
 
-    .upload-area { max-width: 600px; }
+    .upload-area { max-width: 700px; }
     .field { margin-bottom: 1.5rem; }
     .field label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
 
@@ -364,9 +404,30 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
     .file-drop p { margin: 0.5rem 0; }
     .file-drop small { color: var(--text-color-secondary); }
 
-    .summary-bar {
-      display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+    .arquivos-list {
+      background: var(--surface-ground); border-radius: 10px;
+      padding: 1rem; margin-top: 1rem;
     }
+    .arquivo-item {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--surface-card); border-radius: 8px;
+      padding: 0.75rem 1rem; margin-bottom: 0.5rem; gap: 1rem;
+    }
+    .arquivo-info { display: flex; align-items: center; gap: 0.75rem; flex: 1; }
+    .arquivo-nome { font-weight: 600; font-size: 0.9rem; }
+    .arquivo-meta { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.25rem; font-size: 0.85rem; }
+    .arquivo-qtd { color: var(--text-color-secondary); }
+    .arquivo-valor { font-weight: 600; color: #3b82f6; }
+
+    .resumo-total {
+      display: flex; gap: 2rem; margin-top: 0.75rem;
+      padding-top: 0.75rem; border-top: 1px solid var(--surface-border);
+      font-size: 0.9rem;
+    }
+    .val-pos { color: #22c55e; }
+    .val-neg { color: #ef4444; }
+
+    .summary-bar { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
     .stat { display: flex; flex-direction: column; padding: 0.75rem 1.25rem; border-radius: 8px; background: var(--surface-ground); }
     .stat span { font-size: 0.8rem; color: var(--text-color-secondary); }
     .stat strong { font-size: 1.1rem; }
@@ -374,7 +435,6 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
     .stat.pago strong { color: #22c55e; }
     .stat.receita strong { color: #22c55e; }
     .stat.despesa strong { color: #ef4444; }
-    .stat.total strong { color: #3b82f6; }
 
     .text-muted { color: var(--text-color-secondary); }
     .valor-pos { color: #22c55e; font-weight: 600; }
@@ -402,7 +462,6 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
     .det-fornecedor::before { content: '| '; }
     .det-valor { color: #ef4444; }
     .det-data { color: var(--text-color-secondary); }
-
     .ebitda-row { background: #eff6ff; }
     .ebitda-row td { font-weight: 700; color: #1e40af; }
     .destaque-row td { font-style: italic; font-size: 0.9rem; }
@@ -410,8 +469,8 @@ const CATEGORIA_DRE_MAP: Record<string, GrupoDre> = {
 })
 export class ImportacaoComponent implements OnInit {
   activeStep = signal(0);
-  fileName = signal<string | null>(null);
   linhas = signal<LinhaExtrato[]>([]);
+  arquivosCarregados = signal<ArquivoImportado[]>([]);
   importing = signal(false);
   dreResult = signal<DreData | null>(null);
   lancamentosImportados = signal(0);
@@ -451,19 +510,16 @@ export class ImportacaoComponent implements OnInit {
     plugins: { legend: { display: false } },
   };
 
-  canAdvanceStep1 = computed(() => {
-    const ok = !!this.empresaSelecionadaId && this.linhas().length > 0;
-    console.log('canAdvance:', ok, 'empresa:', this.empresaSelecionadaId, 'linhas:', this.linhas().length);
-    return ok;
-  });
+  canAdvanceStep1 = computed(() =>
+    !!this.empresaSelecionadaId && this.linhas().length > 0
+  );
 
+  totalLinhas = computed(() => this.linhas().length);
   qtdAberto = computed(() => this.linhas().filter((l) => l.situacao === 'Em aberto').length);
   qtdPago = computed(() => this.linhas().filter((l) => l.situacao !== 'Em aberto').length);
   totalAberto = computed(() => this.linhas().filter((l) => l.situacao === 'Em aberto').reduce((s, l) => s + l.valorAberto, 0));
-  totalPago = computed(() => this.linhas().filter((l) => l.situacao !== 'Em aberto').reduce((s, l) => s + l.valor, 0));
-  totalGeral = computed(() => this.linhas().reduce((s, l) => s + l.valor, 0));
-  totalReceitas = computed(() => this.linhas().filter((l) => l.grupoDre === 'receita_bruta').reduce((s, l) => s + l.valor, 0));
-  totalDespesas = computed(() => this.linhas().filter((l) => l.grupoDre !== 'receita_bruta').reduce((s, l) => s + l.valor, 0));
+  totalReceitas = computed(() => this.linhas().filter((l) => l.tipoDetectado === 'receita').reduce((s, l) => s + l.valor, 0));
+  totalDespesas = computed(() => this.linhas().filter((l) => l.tipoDetectado === 'despesa').reduce((s, l) => s + l.valor, 0));
 
   empresaSelecionadaNome = computed(() => {
     const emp = this.empresaService.empresas().find((e) => e.id === this.empresaSelecionadaId);
@@ -488,6 +544,7 @@ export class ImportacaoComponent implements OnInit {
     private planoContasService: PlanoContasService,
     private lancamentoService: LancamentoService,
     private dreService: DreService,
+    private supabaseService: SupabaseService,
     private messageService: MessageService,
   ) {}
 
@@ -502,61 +559,141 @@ export class ImportacaoComponent implements OnInit {
     this.empresaSelecionadaId = this.empresaService.empresaAtivaId();
   }
 
-  onFileSelect(event: Event) {
+  onFilesSelect(event: Event) {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    this.fileName.set(file.name);
+    const files = Array.from(input.files ?? []);
+    if (!files.length) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const data = new Uint8Array(e.target?.result as ArrayBuffer);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json<any>(sheet, { raw: false });
-      this.parseRows(json);
-    };
-    reader.readAsArrayBuffer(file);
+    for (const file of files) {
+      this.processarArquivo(file);
+    }
+
+    // Limpar input para permitir re-selecionar os mesmos arquivos
+    input.value = '';
   }
 
-  private parseRows(rows: any[]) {
+  private processarArquivo(file: File) {
+    const ext = file.name.toLowerCase().split('.').pop();
+
+    if (ext === 'csv') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        this.processarTexto(text, file.name);
+      };
+      reader.readAsText(file, 'ISO-8859-1');
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json<any>(sheet, { raw: false });
+        this.processarLinhas(json, file.name);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  }
+
+  private processarTexto(text: string, nomeArquivo: string) {
+    const firstLine = text.split('\n')[0];
+    const sep = firstLine.includes(';') ? ';' : ',';
+    const lines = text.split('\n').filter((l) => l.trim());
+    if (lines.length < 2) return;
+
+    const headers = lines[0].split(sep).map((h) => h.trim().replace(/"/g, ''));
+    const rows: any[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(sep).map((c) => c.trim().replace(/"/g, ''));
+      if (cols.every((c) => !c)) continue;
+      const row: any = {};
+      headers.forEach((h, idx) => { row[h] = cols[idx] ?? ''; });
+      rows.push(row);
+    }
+
+    this.processarLinhas(rows, nomeArquivo);
+  }
+
+  private processarLinhas(rows: any[], nomeArquivo: string) {
     if (rows.length === 0) return;
 
     const keys = Object.keys(rows[0]);
     const has = (hint: string) => keys.some((k) => k.toLowerCase().includes(hint));
 
-    // Detectar formato
     const isExtrato = has('data movimento') || has('saldo conta');
-    const isContasPagar = has('data de vencimento') || has('parcela em aberto');
+    const isAnaliseRecebimentos = has('centro de custo') || (has('categoria') && has('valor total'));
+    // Arquivo de pagamentos/despesas quando tem "data de vencimento"
+    const isContasPagar = !isAnaliseRecebimentos && (has('data de vencimento') || has('parcela em aberto'));
 
-    const linhas: LinhaExtrato[] = [];
+    const novasLinhas: LinhaExtrato[] = [];
 
     for (const row of rows) {
-      let dataVenc: string;
-      let dataComp: string;
-      let descricao: string;
-      let valor: number;
-      let valorPago: number;
-      let valorAberto: number;
-      let situacao: string;
-      let categoria: string;
-      let contaBancaria: string;
-      let formaPagamento: string;
-      let notaFiscal: string;
-      let observacoes: string;
-      let recorrencia: string;
-      let tipo: string;
+      let dataVenc = '';
+      let dataComp = '';
+      let descricao = '';
+      let valor = 0;
+      let valorPago = 0;
+      let valorAberto = 0;
+      let situacao = '';
+      let categoria = '';
+      let contaBancaria = '';
+      let formaPagamento = '';
+      let notaFiscal = '';
+      let observacoes = '';
+      let recorrencia = '';
+      let tipoDetectado: 'receita' | 'despesa' = 'despesa';
 
-      if (isExtrato) {
-        // Formato Extrato Financeiro
+      if (isAnaliseRecebimentos) {
+        const mesCol = keys.find((k) => /^[a-zç]+\.?\/\d{2}$/i.test(k.trim())) ?? keys[keys.length - 1];
+        descricao = row['Categoria'] ?? row['categoria'] ?? '';
+        categoria = row['Centro de custo'] ?? row['centro de custo'] ?? '';
+        valor = this.parseValor(row[mesCol] ?? row['Valor total'] ?? row['valor total'] ?? '0');
+        valorPago = valor;
+        valorAberto = 0;
+
+        // Detectar tipo pelo nome do arquivo e pelas categorias
+        const nomeLower = nomeArquivo.toLowerCase();
+        const isPagamento = nomeLower.includes('pagamento') || nomeLower.includes('pagar') || nomeLower.includes('despesa');
+        const isRecebimento = nomeLower.includes('recebimento') || nomeLower.includes('receber') || nomeLower.includes('receita');
+        if (isPagamento) {
+          tipoDetectado = 'despesa';
+          situacao = 'Pago';
+        } else if (isRecebimento) {
+          tipoDetectado = 'receita';
+          situacao = 'Recebido';
+        } else {
+          // Fallback: verificar pelo nome da categoria
+          const grupoCat = this.detectGrupoDre(descricao, '');
+          tipoDetectado = grupoCat === 'receita_bruta' ? 'receita' : 'despesa';
+          situacao = tipoDetectado === 'receita' ? 'Recebido' : 'Pago';
+        }
+
+        const meses: Record<string, string> = {
+          jan: '01', fev: '02', mar: '03', abr: '04', mai: '05', jun: '06',
+          jul: '07', ago: '08', set: '09', out: '10', nov: '11', dez: '12',
+        };
+        const mesMatch = mesCol.match(/^([a-z]{3})\.?\/(\d{2})$/i);
+        if (mesMatch) {
+          const mes = meses[mesMatch[1].toLowerCase()] ?? '01';
+          const ano = `20${mesMatch[2]}`;
+          const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
+          dataVenc = `${String(ultimoDia).padStart(2, '0')}/${mes}/${ano}`;
+          dataComp = dataVenc;
+        } else {
+          dataVenc = new Date().toLocaleDateString('pt-BR');
+          dataComp = dataVenc;
+        }
+      } else if (isExtrato) {
         dataVenc = row['Data movimento'] ?? row['Data original de vencimento'] ?? '';
         dataComp = row['Data de competência'] ?? '';
         descricao = row['Descrição'] ?? '';
         valor = this.parseValor(row['Valor (R$)'] ?? row['Valor original (R$)'] ?? '0');
-        valorPago = row['Situação']?.toLowerCase()?.includes('conciliado') || row['Situação']?.toLowerCase()?.includes('pago') ? valor : 0;
+        const sitStr = (row['Situação'] ?? '').toLowerCase();
+        valorPago = sitStr.includes('conciliado') || sitStr.includes('pago') ? valor : 0;
         valorAberto = valorPago > 0 ? 0 : valor;
         situacao = row['Situação'] ?? 'Em aberto';
-        tipo = row['Tipo'] ?? '';
+        const tipoRow = (row['Tipo'] ?? '').toLowerCase();
+        tipoDetectado = tipoRow === 'receita' ? 'receita' : 'despesa';
         categoria = row['Categoria 1'] ?? '';
         contaBancaria = row['Conta bancária'] ?? '';
         formaPagamento = row['Forma de pgto/recbto'] ?? '';
@@ -564,7 +701,7 @@ export class ImportacaoComponent implements OnInit {
         observacoes = row['Observações'] ?? '';
         recorrencia = row['Recorrência'] ?? '';
       } else {
-        // Formato Visão Contas a Pagar
+        // Visão Contas a Pagar — sempre despesa
         dataVenc = row['Data de vencimento'] ?? row['Data vencimento'] ?? '';
         dataComp = row['Data de competência'] ?? row['Data competência'] ?? '';
         descricao = row['Descrição'] ?? row['Descricao'] ?? '';
@@ -572,7 +709,7 @@ export class ImportacaoComponent implements OnInit {
         valorPago = this.parseValor(row['Valor total pago da parcela (R$)'] ?? row['Valor pago'] ?? '0');
         valorAberto = this.parseValor(row['Valor total da parcela em aberto (R$)'] ?? row['Valor em aberto'] ?? '0');
         situacao = row['Situação'] ?? row['Situacao'] ?? 'Em aberto';
-        tipo = 'Despesa';
+        tipoDetectado = 'despesa';
         categoria = row['Categoria 1'] ?? row['Categoria'] ?? '';
         contaBancaria = row['Conta bancária'] ?? row['Conta bancaria'] ?? '';
         formaPagamento = row['Forma de pagamento'] ?? '';
@@ -583,16 +720,19 @@ export class ImportacaoComponent implements OnInit {
 
       if (!descricao && valor === 0) continue;
 
-      // Normalizar situação
       const sitLower = situacao.toLowerCase();
       let sitNorm = 'Em aberto';
       if (sitLower.includes('conciliado') || sitLower.includes('pago') || sitLower.includes('liquidado') || sitLower.includes('recebid')) {
-        sitNorm = tipo.toLowerCase() === 'receita' ? 'Recebido' : 'Pago';
+        sitNorm = tipoDetectado === 'receita' ? 'Recebido' : 'Pago';
       }
 
-      const grupoDre = this.detectGrupoDre(descricao, categoria, tipo);
+      const grupoDre = tipoDetectado === 'receita'
+        ? 'receita_bruta'
+        : this.detectGrupoDre(descricao, categoria) === 'receita_bruta'
+          ? 'desp_operacional'
+          : this.detectGrupoDre(descricao, categoria);
 
-      linhas.push({
+      novasLinhas.push({
         dataVencimento: dataVenc,
         dataCompetencia: dataComp,
         descricao,
@@ -607,42 +747,63 @@ export class ImportacaoComponent implements OnInit {
         observacoes,
         recorrencia,
         grupoDre,
-        selecionado: true,
+        tipoDetectado,
+        arquivoOrigem: nomeArquivo,
       });
     }
 
-    this.linhas.set(linhas);
+    if (novasLinhas.length === 0) {
+      this.messageService.add({ severity: 'warn', summary: `Nenhuma linha reconhecida em ${nomeArquivo}` });
+      return;
+    }
+
+    // Acumular linhas (não substituir)
+    this.linhas.update((atual) => [...atual, ...novasLinhas]);
+
+    // Registrar arquivo
+    const totalRec = novasLinhas.filter((l) => l.tipoDetectado === 'receita').reduce((s, l) => s + l.valor, 0);
+    const totalDesp = novasLinhas.filter((l) => l.tipoDetectado === 'despesa').reduce((s, l) => s + l.valor, 0);
+    const tipoArq: 'receita' | 'despesa' | 'misto' =
+      totalRec > 0 && totalDesp === 0 ? 'receita' :
+      totalDesp > 0 && totalRec === 0 ? 'despesa' : 'misto';
+
+    this.arquivosCarregados.update((atual) => [
+      ...atual.filter((a) => a.nome !== nomeArquivo),
+      {
+        nome: nomeArquivo,
+        tipoDetectado: tipoArq,
+        totalLinhas: novasLinhas.length,
+        totalValor: totalRec + totalDesp,
+        status: 'ok',
+      },
+    ]);
+  }
+
+  removerArquivo(nome: string) {
+    this.linhas.update((atual) => atual.filter((l) => l.arquivoOrigem !== nome));
+    this.arquivosCarregados.update((atual) => atual.filter((a) => a.nome !== nome));
   }
 
   private parseValor(raw: any): number {
     if (typeof raw === 'number') return Math.abs(raw);
     const str = String(raw).replace(/\s/g, '');
-
-    // Se tem vírgula, é formato BR (1.234,56) → remover pontos, trocar vírgula
     if (str.includes(',')) {
       const num = parseFloat(str.replace(/\./g, '').replace(',', '.'));
       return isNaN(num) ? 0 : Math.abs(num);
     }
-
-    // Sem vírgula = formato US/Excel (1234.56 ou 55000) → usar direto
     const num = parseFloat(str);
     return isNaN(num) ? 0 : Math.abs(num);
   }
 
-  private detectGrupoDre(descricao: string, categoria: string, tipo?: string): GrupoDre {
+  private detectGrupoDre(descricao: string, categoria: string): GrupoDre {
     const texto = `${descricao} ${categoria}`.toLowerCase();
-
-    if (tipo?.toLowerCase() === 'receita') return 'receita_bruta';
-
     for (const [keyword, grupo] of Object.entries(CATEGORIA_DRE_MAP)) {
       if (texto.includes(keyword)) return grupo;
     }
-
     return 'desp_operacional';
   }
 
   nextStep() {
-    console.log('nextStep called, current:', this.activeStep(), 'linhas:', this.linhas().length);
     if (this.activeStep() < 2) this.activeStep.set(this.activeStep() + 1);
   }
 
@@ -665,15 +826,14 @@ export class ImportacaoComponent implements OnInit {
       const planoContaId = contas.find((c) => c.grupo_dre === l.grupoDre)?.id ?? contas[0]?.id;
       const parts = l.dataVencimento.split('/');
       const dataIso = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : l.dataVencimento;
-
       const isPago = l.situacao !== 'Em aberto';
 
       return {
         descricao: l.descricao,
-        tipo: l.grupoDre === 'receita_bruta' ? 'receita' : 'despesa',
+        tipo: l.tipoDetectado,
         valor: l.valor,
         data_vencimento: dataIso,
-        status: isPago ? (l.grupoDre === 'receita_bruta' ? 'recebido' : 'pago') : 'pendente',
+        status: isPago ? (l.tipoDetectado === 'receita' ? 'recebido' : 'pago') : 'pendente',
         data_pagamento: isPago ? dataIso : null,
         plano_conta_id: planoContaId,
         empresa_id: empresaId,
@@ -687,10 +847,17 @@ export class ImportacaoComponent implements OnInit {
     const count = data?.length ?? 0;
     this.lancamentosImportados.set(count);
 
-    // Gerar DRE
-    const datas = lancamentos.map((l) => l.data_vencimento).sort();
-    const dataInicio = datas[0];
-    const dataFim = datas[datas.length - 1];
+    // Buscar range completo de TODOS os lançamentos da empresa para o DRE
+    const { data: todosDados } = await this.supabaseService.supabase
+      .from('lancamentos')
+      .select('data_vencimento')
+      .eq('empresa_id', empresaId)
+      .order('data_vencimento', { ascending: true });
+
+    const todasDatas = (todosDados ?? []).map((l: any) => l.data_vencimento).sort();
+    const dataInicio = todasDatas[0] ?? lancamentos[0]?.data_vencimento;
+    const dataFim = todasDatas[todasDatas.length - 1] ?? lancamentos[lancamentos.length - 1]?.data_vencimento;
+
     const dre = await this.dreService.loadDre(empresaId, dataInicio, dataFim, this.empresaSelecionadaNome());
     this.dreResult.set(dre);
 
@@ -747,7 +914,7 @@ export class ImportacaoComponent implements OnInit {
   reset() {
     this.activeStep.set(0);
     this.linhas.set([]);
-    this.fileName.set(null);
+    this.arquivosCarregados.set([]);
     this.dreResult.set(null);
     this.lancamentosImportados.set(0);
   }
