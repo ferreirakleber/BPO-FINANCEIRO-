@@ -1,4 +1,4 @@
-import { ApplicationConfig, provideZoneChangeDetection, LOCALE_ID, isDevMode } from '@angular/core';
+import { ApplicationConfig, provideZoneChangeDetection, LOCALE_ID } from '@angular/core';
 import { registerLocaleData } from '@angular/common';
 import localePt from '@angular/common/locales/pt';
 import { provideRouter } from '@angular/router';
@@ -6,7 +6,6 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { providePrimeNG } from 'primeng/config';
 import Aura from '@primeng/themes/aura';
 import { routes } from './app.routes';
-import { provideServiceWorker } from '@angular/service-worker';
 
 registerLocaleData(localePt, 'pt-BR');
 
@@ -25,9 +24,6 @@ export const appConfig: ApplicationConfig = {
           cssLayer: false,
         },
       },
-    }), provideServiceWorker('ngsw-worker.js', {
-            enabled: !isDevMode(),
-            registrationStrategy: 'registerWhenStable:30000'
-          }),
+    }),
   ],
 };
