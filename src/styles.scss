@@ -1,17 +1,181 @@
 @import "primeicons/primeicons.css";
 
-* {
-  margin: 0;
-  padding: 0;
+/* ── Google Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+/* ── Reset ── */
+*, *::before, *::after {
+  margin: 0; padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  font-family: var(--font-family);
-  background: var(--p-surface-ground);
-  color: var(--p-text-color);
+/* ── Design Tokens — Light ── */
+:root {
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body:    'Inter', sans-serif;
+
+  --bg-page:      #F0F4F8;
+  --bg-card:      #FFFFFF;
+  --bg-hover:     #F1F5F9;
+  --bg-sidebar:   #0F172A;
+  --bg-sidebar-2: #1E293B;
+  --accent:       #3B82F6;
+  --accent-glow:  rgba(59,130,246,0.20);
+  --accent-dark:  #2563EB;
+  --success:      #10B981;
+  --warning:      #F59E0B;
+  --danger:       #EF4444;
+  --text-primary: #0F172A;
+  --text-secondary: #64748B;
+  --text-muted:   #94A3B8;
+  --border:       #E2E8F0;
+  --shadow-sm:    0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:    0 4px 16px rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.04);
+  --shadow-lg:    0 10px 40px rgba(0,0,0,.12), 0 4px 12px rgba(0,0,0,.06);
+  --radius-sm:    6px;
+  --radius-md:    10px;
+  --radius-lg:    16px;
+  --sidebar-w:    260px;
+  --header-h:     64px;
 }
 
-.w-full {
-  width: 100%;
+/* ── Dark Mode Tokens ── */
+.dark-mode {
+  --bg-page:      #0B1120;
+  --bg-card:      #111827;
+  --bg-hover:     #1E293B;
+  --bg-sidebar:   #060C18;
+  --bg-sidebar-2: #0F172A;
+  --text-primary: #F1F5F9;
+  --text-secondary:#94A3B8;
+  --text-muted:   #475569;
+  --border:       #1E293B;
+  --shadow-sm:    0 1px 3px rgba(0,0,0,.4);
+  --shadow-md:    0 4px 16px rgba(0,0,0,.4);
+  --shadow-lg:    0 10px 40px rgba(0,0,0,.5);
 }
+
+/* ── PrimeNG Overrides ── */
+:root {
+  --p-surface-ground:     var(--bg-page);
+  --p-surface-card:       var(--bg-card);
+  --p-surface-border:     var(--border);
+  --p-surface-hover:      var(--bg-hover);
+  --p-text-color:         var(--text-primary);
+  --p-text-muted-color:   var(--text-secondary);
+  --p-primary-color:      var(--accent);
+  --p-primary-color-text: #ffffff;
+  --surface-ground:       var(--bg-page);
+  --surface-card:         var(--bg-card);
+  --surface-border:       var(--border);
+  --surface-hover:        var(--bg-hover);
+  --surface-50:           var(--bg-hover);
+  --surface-100:          var(--bg-hover);
+  --surface-200:          var(--border);
+  --text-color:           var(--text-primary);
+  --text-color-secondary: var(--text-secondary);
+  --primary-color:        var(--accent);
+  --primary-color-text:   #ffffff;
+  --font-family:          var(--font-body);
+}
+
+/* ── Base ── */
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.3s, color 0.3s;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Utility ── */
+.w-full { width: 100%; }
+.text-right { text-align: right; }
+.bold { font-weight: 700; }
+
+/* ── PrimeNG Table Premium ── */
+:host ::ng-deep .p-datatable .p-datatable-thead > tr > th {
+  background: var(--bg-hover) !important;
+  color: var(--text-secondary) !important;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--border) !important;
+  border-top: none !important;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-tbody > tr {
+  border-bottom: 1px solid var(--border) !important;
+  transition: background 0.15s;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-tbody > tr:hover {
+  background: var(--bg-hover) !important;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-tbody > tr > td {
+  border: none !important;
+  padding: 0.75rem 1rem !important;
+  color: var(--text-primary);
+}
+
+/* ── PrimeNG Card ── */
+:host ::ng-deep .p-card {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+:host ::ng-deep .p-card .p-card-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+/* ── PrimeNG Button ── */
+:host ::ng-deep .p-button {
+  border-radius: var(--radius-sm) !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  transition: all 0.2s !important;
+}
+
+/* ── PrimeNG Tag ── */
+:host ::ng-deep .p-tag {
+  border-radius: 99px !important;
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em;
+}
+
+/* ── PrimeNG Dropdown ── */
+:host ::ng-deep .p-dropdown {
+  border-radius: var(--radius-sm) !important;
+  border-color: var(--border) !important;
+  background: var(--bg-card) !important;
+}
+
+/* ── PrimeNG Steps ── */
+:host ::ng-deep .p-steps .p-steps-item .p-menuitem-link .p-steps-number {
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+
+/* ── Animations ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter { animation: fadeIn 0.3s ease both; }

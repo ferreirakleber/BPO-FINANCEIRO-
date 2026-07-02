@@ -10,7 +10,7 @@ import { HeaderComponent } from '../shared/components/header/header.component';
   template: `
     <div class="layout">
       <app-sidebar />
-      <div class="layout-content">
+      <div class="layout-body">
         <app-header />
         <main class="main-content">
           <router-outlet />
@@ -22,19 +22,27 @@ import { HeaderComponent } from '../shared/components/header/header.component';
     .layout {
       display: flex;
       min-height: 100vh;
+      background: var(--bg-page);
+      transition: background 0.3s;
     }
 
-    .layout-content {
+    .layout-body {
       flex: 1;
-      margin-left: 250px;
+      margin-left: var(--sidebar-w, 260px);
       display: flex;
       flex-direction: column;
+      min-height: 100vh;
     }
 
     .main-content {
-      padding: 1.5rem;
-      background: var(--surface-ground);
       flex: 1;
+      padding: 1.75rem 2rem;
+      background: var(--bg-page);
+      transition: background 0.3s;
+    }
+
+    @media (max-width: 768px) {
+      .layout-body { margin-left: 0; }
     }
   `,
 })
