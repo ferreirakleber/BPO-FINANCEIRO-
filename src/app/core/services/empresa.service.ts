@@ -39,6 +39,24 @@ export class EmpresaService {
   setEmpresaAtiva(empresa: Empresa) {
     this._empresaAtiva.set(empresa);
     localStorage.setItem('empresa_ativa_id', empresa.id);
+    this.aplicarTemaEmpresa(empresa);
+  }
+
+  aplicarTemaEmpresa(empresa: Empresa) {
+    const cor = empresa.cor_primaria || '#3B82F6';
+    const root = document.documentElement;
+    root.style.setProperty('--accent', cor);
+    root.style.setProperty('--empresa-cor', cor);
+    root.style.setProperty('--empresa-cor-dark', this.darken(cor, 20));
+    root.style.setProperty('--empresa-cor-light', cor + '22');
+  }
+
+  private darken(hex: string, pct: number): string {
+    const n = parseInt(hex.replace('#', ''), 16);
+    const r = Math.max(0, (n >> 16) - Math.round(((n >> 16) * pct) / 100));
+    const g = Math.max(0, ((n >> 8) & 0xff) - Math.round((((n >> 8) & 0xff) * pct) / 100));
+    const b = Math.max(0, (n & 0xff) - Math.round(((n & 0xff) * pct) / 100));
+    return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
   }
 
   async restoreEmpresaAtiva() {

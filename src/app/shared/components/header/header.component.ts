@@ -16,7 +16,13 @@ import { CnpjPipe } from '../../pipes/cnpj.pipe';
       <div class="header-left">
         @if (empresaService.empresaAtiva(); as empresa) {
           <div class="empresa-chip">
-            <span class="empresa-dot"></span>
+            @if (empresa.logo_url) {
+              <img [src]="empresa.logo_url" class="empresa-logo" [alt]="empresa.nome_fantasia || empresa.razao_social" />
+            } @else {
+              <div class="empresa-avatar" [style.background]="empresa.cor_primaria || 'var(--accent)'">
+                {{ (empresa.nome_fantasia || empresa.razao_social).charAt(0) }}
+              </div>
+            }
             <div>
               <span class="empresa-name">{{ empresa.nome_fantasia || empresa.razao_social }}</span>
               <span class="empresa-cnpj">{{ empresa.cnpj | cnpj }}</span>
@@ -79,6 +85,23 @@ import { CnpjPipe } from '../../pipes/cnpj.pipe';
       border: 1px solid var(--border);
       padding: 0.4rem 0.875rem 0.4rem 0.625rem;
       border-radius: 99px;
+    }
+
+    .empresa-logo {
+      width: 36px; height: 36px;
+      object-fit: contain;
+      border-radius: 6px;
+      background: #fff;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .empresa-avatar {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 700; font-size: 1rem;
+      flex-shrink: 0;
     }
 
     .empresa-dot {
