@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { EmpresaService } from '../../../core/services/empresa.service';
 
 interface NavItem {
   label: string;
@@ -18,13 +19,19 @@ interface NavItem {
     <aside class="sidebar">
       <!-- Logo -->
       <div class="logo-area">
-        <div class="logo-icon">
-          <i class="pi pi-chart-line"></i>
-        </div>
-        <div class="logo-text">
-          <span class="logo-name">BPO</span>
-          <span class="logo-sub">Financeiro</span>
-        </div>
+        @if (empresaService.empresaAtiva()?.logo_url; as logo) {
+          <div class="logo-empresa-wrap">
+            <img [src]="logo" class="logo-empresa-img" alt="Logo" />
+          </div>
+        } @else {
+          <div class="logo-icon" [style.background]="empresaService.empresaAtiva()?.cor_primaria ? 'linear-gradient(135deg, ' + empresaService.empresaAtiva()!.cor_primaria + ', ' + empresaService.empresaAtiva()!.cor_primaria + 'aa)' : 'linear-gradient(135deg, #3B82F6, #2563EB)'">
+            <i class="pi pi-chart-line"></i>
+          </div>
+          <div class="logo-text">
+            <span class="logo-name">{{ (empresaService.empresaAtiva()?.nome_fantasia || empresaService.empresaAtiva()?.razao_social || 'BPO') | slice:0:12 }}</span>
+            <span class="logo-sub">Financeiro</span>
+          </div>
+        }
       </div>
 
       <!-- Nav -->
@@ -121,8 +128,24 @@ interface NavItem {
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      padding: 1.5rem 1.25rem 1.25rem;
+      padding: 1.25rem 1.25rem 1rem;
       border-bottom: 1px solid rgba(255,255,255,0.07);
+      min-height: 72px;
+    }
+
+    .logo-empresa-wrap {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 0.25rem;
+    }
+
+    .logo-empresa-img {
+      max-height: 44px;
+      max-width: 100%;
+      object-fit: contain;
+      filter: brightness(0) invert(1);
     }
 
     .logo-icon {
@@ -204,7 +227,7 @@ interface NavItem {
     }
 
     .nav-item.active {
-      background: rgba(59,130,246,0.15);
+      background: var(--empresa-cor-light, rgba(59,130,246,0.15));
       color: #93C5FD;
     }
 
@@ -216,9 +239,9 @@ interface NavItem {
       transform: translateY(-50%);
       width: 3px;
       height: 60%;
-      background: #3B82F6;
+      background: var(--empresa-cor, #3B82F6);
       border-radius: 99px;
-      box-shadow: 0 0 8px rgba(59,130,246,0.8);
+      box-shadow: 0 0 8px var(--empresa-cor, rgba(59,130,246,0.8));
     }
 
     .nav-icon {
@@ -235,7 +258,7 @@ interface NavItem {
     }
 
     .nav-item.active .nav-icon {
-      background: rgba(59,130,246,0.2);
+      background: var(--empresa-cor-light, rgba(59,130,246,0.2));
     }
 
     .nav-icon i {
@@ -257,5 +280,5 @@ interface NavItem {
   `,
 })
 export class SidebarComponent {
-  constructor(public authService: AuthService) {}
+  constructor(public authService: AuthService, public empresaService: EmpresaService) {}
 }
