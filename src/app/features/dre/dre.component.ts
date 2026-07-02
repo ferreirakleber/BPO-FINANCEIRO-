@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, computed } from '@angular/core';
+import { Component, OnInit, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TableModule } from 'primeng/table';
@@ -14,6 +14,7 @@ import { MessageService } from 'primeng/api';
 import { DreService } from '../../core/services/dre.service';
 import { EmpresaService } from '../../core/services/empresa.service';
 import { AuthService } from '../../core/services/auth.service';
+import { SyncService } from '../../core/services/sync.service';
 import { DreData, DreLinha } from '../../core/models/dre.model';
 
 @Component({
@@ -282,7 +283,13 @@ export class DreComponent implements OnInit {
     public empresaService: EmpresaService,
     public authService: AuthService,
     private messageService: MessageService,
-  ) {}
+    private syncService: SyncService,
+  ) {
+    effect(() => {
+      const sync = this.syncService.lastSync();
+      if (sync) this.loadDre();
+    });
+  }
 
   async ngOnInit() {
     await this.loadDre();

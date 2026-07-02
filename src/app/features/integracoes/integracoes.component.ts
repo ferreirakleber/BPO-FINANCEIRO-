@@ -12,6 +12,8 @@ import { DropdownModule } from 'primeng/dropdown';
 import { MessageService } from 'primeng/api';
 import { EmpresaService } from '../../core/services/empresa.service';
 import { SupabaseService } from '../../core/services/supabase.service';
+import { SyncService } from '../../core/services/sync.service';
+import { LancamentoService } from '../../core/services/lancamento.service';
 
 const CA_CLIENT_ID  = '70qhamr04j19mbsmv8692msrli';
 const CA_AUTH_URL   = 'https://auth.contaazul.com/oauth2/authorize';
@@ -195,6 +197,8 @@ export class IntegracoesComponent implements OnInit {
     private empresaService: EmpresaService,
     private supabaseService: SupabaseService,
     private messageService: MessageService,
+    private syncService: SyncService,
+    private lancamentoService: LancamentoService,
     private route: ActivatedRoute,
     private router: Router,
   ) {}
@@ -295,6 +299,8 @@ export class IntegracoesComponent implements OnInit {
         summary: `${result.importados} lançamentos sincronizados!`,
       });
       await this.carregarIntegracoes();
+      await this.lancamentoService.loadLancamentos();
+      this.syncService.notifySync();
     } catch (e: any) {
       this.messageService.add({ severity: 'error', summary: 'Erro na sincronização', detail: e.message });
     } finally {

@@ -13,13 +13,15 @@ const corsHeaders = {
 
 // Renovar access_token usando refresh_token
 async function refreshToken(refreshToken: string) {
+  const credentials = btoa(`${CA_CLIENT_ID}:${CA_CLIENT_SECRET}`);
   const res = await fetch(CA_TOKEN_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${credentials}`,
+    },
     body: new URLSearchParams({
       grant_type:    'refresh_token',
-      client_id:     CA_CLIENT_ID,
-      client_secret: CA_CLIENT_SECRET,
       refresh_token: refreshToken,
     }),
   });
@@ -95,6 +97,7 @@ serve(async (req) => {
         dtVencimentoFim:    fim,
         status: 'TODOS',
       });
+      console.log('RECEBIMENTOS RAW:', JSON.stringify(recebimentos).slice(0, 500));
 
       for (const r of (recebimentos?.items ?? recebimentos ?? [])) {
         lancamentos.push({
@@ -122,6 +125,7 @@ serve(async (req) => {
         dtVencimentoFim:    fim,
         status: 'TODOS',
       });
+      console.log('PAGAMENTOS RAW:', JSON.stringify(pagamentos).slice(0, 500));
 
       for (const p of (pagamentos?.items ?? pagamentos ?? [])) {
         lancamentos.push({

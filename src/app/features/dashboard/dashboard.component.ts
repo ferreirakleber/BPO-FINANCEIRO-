@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule, Router } from '@angular/router';
@@ -10,6 +10,7 @@ import { DropdownModule } from 'primeng/dropdown';
 import { EmpresaService } from '../../core/services/empresa.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SupabaseService } from '../../core/services/supabase.service';
+import { SyncService } from '../../core/services/sync.service';
 import { Lancamento, StatusLancamento } from '../../core/models/lancamento.model';
 import { ContaBancaria } from '../../core/models/conta-bancaria.model';
 
@@ -337,7 +338,13 @@ export class DashboardComponent implements OnInit {
     public authService: AuthService,
     public router: Router,
     private supabase: SupabaseService,
-  ) {}
+    private syncService: SyncService,
+  ) {
+    effect(() => {
+      const sync = this.syncService.lastSync();
+      if (sync) this.reload();
+    });
+  }
 
   async ngOnInit() {
     await this.reload();

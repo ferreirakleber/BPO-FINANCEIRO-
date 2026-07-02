@@ -25,27 +25,35 @@ serve(async (req) => {
       });
     }
 
-    // Trocar code por access_token (server-side, client_secret seguro)
+    // Trocar code por access_token — Cognito requer Basic Auth no header
+    const credentials = btoa(`${CA_CLIENT_ID}:${CA_CLIENT_SECRET}`);
     const tokenRes = await fetch(CA_TOKEN_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${credentials}`,
+      },
       body: new URLSearchParams({
-        grant_type:    'authorization_code',
-        client_id:     CA_CLIENT_ID,
-        client_secret: CA_CLIENT_SECRET,
-        redirect_uri:  REDIRECT_URI,
+        grant_type:   'authorization_code',
+        redirect_uri: REDIRECT_URI,
         code,
       }),
     });
 
+    const tokenBody = await tokenRes.text();
+    console.log('TOKEN RESPONSE STATUS:', tokenRes.status);
+    console.log('TOKEN RESPONSE BODY:', tokenBody.slice(0, 500));
+
     if (!tokenRes.ok) {
-      const err = await tokenRes.text();
-      return new Response(JSON.stringify({ error: 'Falha ao obter token', detail: err }), {
+      return new Response(JSON.stringify({ error: 'Falha ao obter token', detail: tokenBody }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const tokens = await tokenRes.json();
+    const tokens = JSON.parse(tokenBody);
+    console.log('TOKEN KEYS:', Object.keys(tokens).join(', '));
+    console.log('ACCESS TOKEN PREFIX:', (tokens.access_token ?? '').slice(0, 30));
+    console.log('ID TOKEN EXISTS:', !!tokens.id_token);
     const expiresAt = new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000).toISOString();
 
     // Salvar tokens no Supabase
@@ -58,7 +66,7 @@ serve(async (req) => {
       .from('integracoes_contaazul')
       .upsert({
         empresa_id,
-        access_token:  tokens.access_token,
+        access_token:  tokens.id_token ?? tokens.access_token,
         refresh_token: tokens.refresh_token,
         token_type:    tokens.token_type ?? 'Bearer',
         expires_at:    expiresAt,
