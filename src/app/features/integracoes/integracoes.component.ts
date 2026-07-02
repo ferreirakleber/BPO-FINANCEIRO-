@@ -14,7 +14,7 @@ import { EmpresaService } from '../../core/services/empresa.service';
 import { SupabaseService } from '../../core/services/supabase.service';
 
 const CA_CLIENT_ID  = '70qhamr04j19mbsmv8692msrli';
-const CA_AUTH_URL   = 'https://auth.contaazul.com/login';
+const CA_AUTH_URL   = 'https://auth.contaazul.com/oauth2/authorize';
 const REDIRECT_URI  = 'https://bpo-financeiro-app.vercel.app/integracoes/callback';
 const SUPABASE_FN   = 'https://dyevrzaedkbzgvoukdeo.supabase.co/functions/v1';
 
