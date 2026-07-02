@@ -65,6 +65,7 @@ export class EmpresaService {
       const empresa = this._empresas().find((e) => e.id === savedId);
       if (empresa) {
         this._empresaAtiva.set(empresa);
+        this.aplicarTemaEmpresa(empresa);
       }
     }
   }
