@@ -5,9 +5,11 @@ import { roleGuard } from './core/guards/role.guard';
 import { MainLayoutComponent } from './layout/main-layout.component';
 import { LoginComponent } from './features/auth/login.component';
 import { EmpresaSelectComponent } from './features/empresa-select/empresa-select.component';
+import { OauthCallbackComponent } from './features/integracoes/oauth-callback.component';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
+  { path: 'integracoes/callback', component: OauthCallbackComponent },
   {
     path: 'selecionar-empresa',
     component: EmpresaSelectComponent,

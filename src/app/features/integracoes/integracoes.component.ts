@@ -206,8 +206,10 @@ export class IntegracoesComponent implements OnInit {
   }
 
   private async verificarCallback() {
-    const code      = this.route.snapshot.queryParamMap.get('code');
+    const code      = this.route.snapshot.queryParamMap.get('code')
+                   || sessionStorage.getItem('ca_oauth_code');
     const empresaId = sessionStorage.getItem('ca_connect_empresa_id');
+    sessionStorage.removeItem('ca_oauth_code');
 
     if (code && empresaId) {
       sessionStorage.removeItem('ca_connect_empresa_id');
