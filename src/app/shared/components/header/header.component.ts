@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
@@ -6,7 +6,6 @@ import { DropdownModule } from 'primeng/dropdown';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { EmpresaService } from '../../../core/services/empresa.service';
-import { Empresa } from '../../../core/models/empresa.model';
 import { CnpjPipe } from '../../pipes/cnpj.pipe';
 
 @Component({
@@ -34,6 +33,12 @@ import { CnpjPipe } from '../../pipes/cnpj.pipe';
             (onClick)="trocarEmpresa()"
           />
         }
+
+        <!-- Botão Modo Escuro/Claro -->
+        <button class="theme-toggle" (click)="toggleTheme()" [title]="darkMode() ? 'Mudar para modo claro' : 'Mudar para modo escuro'">
+          <i [class]="darkMode() ? 'pi pi-sun' : 'pi pi-moon'"></i>
+          <span>{{ darkMode() ? 'Claro' : 'Escuro' }}</span>
+        </button>
 
         <div class="user-info">
           <span>{{ authService.usuario()?.nome }}</span>
@@ -97,14 +102,61 @@ import { CnpjPipe } from '../../pipes/cnpj.pipe';
       font-size: 0.75rem;
       text-transform: capitalize;
     }
+
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 20px;
+      border: 1px solid var(--surface-border);
+      background: var(--surface-ground);
+      color: var(--text-color);
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .theme-toggle:hover {
+      background: var(--surface-hover);
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+
+    .theme-toggle i {
+      font-size: 0.95rem;
+    }
   `,
 })
 export class HeaderComponent {
+  darkMode = signal<boolean>(false);
+
   constructor(
     public authService: AuthService,
     public empresaService: EmpresaService,
     private router: Router,
-  ) {}
+  ) {
+    // Restaurar preferência salva
+    const saved = localStorage.getItem('bpo-theme');
+    if (saved === 'dark') {
+      this.darkMode.set(true);
+      document.documentElement.classList.add('dark-mode');
+    }
+  }
+
+  toggleTheme() {
+    const isDark = !this.darkMode();
+    this.darkMode.set(isDark);
+
+    if (isDark) {
+      document.documentElement.classList.add('dark-mode');
+      localStorage.setItem('bpo-theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark-mode');
+      localStorage.setItem('bpo-theme', 'light');
+    }
+  }
 
   trocarEmpresa() {
     this.router.navigate(['/selecionar-empresa']);
