@@ -56,6 +56,10 @@ interface NavItem {
             <span class="nav-icon"><i class="pi pi-file-excel"></i></span>
             <span>Importar Extratos</span>
           </a>
+          <a routerLink="/integracoes" routerLinkActive="active" class="nav-item">
+            <span class="nav-icon"><i class="pi pi-link"></i></span>
+            <span>Integrações</span>
+          </a>
           <a routerLink="/contas-bancarias" routerLinkActive="active" class="nav-item">
             <span class="nav-icon"><i class="pi pi-wallet"></i></span>
             <span>Contas Bancárias</span>

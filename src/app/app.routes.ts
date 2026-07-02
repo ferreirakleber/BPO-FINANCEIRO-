@@ -76,6 +76,20 @@ export const routes: Routes = [
             (m) => m.LancamentosComponent,
           ),
       },
+      {
+        path: 'integracoes',
+        loadComponent: () =>
+          import('./features/integracoes/integracoes.component').then(
+            (m) => m.IntegracoesComponent,
+          ),
+      },
+      {
+        path: 'integracoes/callback',
+        loadComponent: () =>
+          import('./features/integracoes/integracoes.component').then(
+            (m) => m.IntegracoesComponent,
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },
